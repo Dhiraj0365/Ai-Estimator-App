@@ -1,6 +1,3 @@
-```python
-# engines/elec_engine.py
-
 """
 Electrical Estimation Engine (Building Services)
 
