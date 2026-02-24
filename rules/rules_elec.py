@@ -1,6 +1,3 @@
-```python
-# rules/rules_elec.py
-
 from __future__ import annotations
 
 """
