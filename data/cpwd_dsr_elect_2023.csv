@@ -1,1 +1,82 @@
+S.No,DSR Code,Description,Unit,Rate
+1,1.28.1,"6 Module flush mounting switch board",each,145
+2,1.28.2,"12 Module flush mounting switch board",each,238
+3,1.28.3,"18 Module flush mounting switch board",each,356
+4,1.28.4,"24 Module flush mounting switch board",each,489
 
+5,1.29.1,"6 Module surface mounting switch board",each,167
+6,1.29.2,"12 Module surface mounting switch board",each,278
+
+7,1.30.1,"M.C.B. SP 6A 240V",each,156
+8,1.30.2,"M.C.B. SP 16A 240V",each,189
+9,1.30.3,"M.C.B. SP 32A 240V",each,234
+10,1.30.4,"M.C.B. DP 40A 240V",each,456
+
+11,1.31.1,"Distribution board SP/DB 4 way 240V",each,789
+12,1.31.2,"Distribution board TPN/DB 8 way 415V",each,1456
+
+13,1.32.1,"PVC conduit pipe 20mm dia heavy gauge",metre,56.70
+14,1.32.2,"PVC conduit pipe 25mm dia heavy gauge",metre,78.90
+15,1.32.3,"PVC conduit pipe 32mm dia heavy gauge",metre,123.40
+
+16,1.33.1,"Copper PVC insulated cable 2 core 1.5sqmm",metre,234.60
+17,1.33.2,"Copper PVC insulated cable 4 core 2.5sqmm",metre,345.60
+18,1.34.1,"M.V. PVC insulated cable 3.5 core 16sqmm",metre,789.40
+
+19,1.35.1,"Ceiling rose phenolic 65mm 3 terminal",each,45.60
+20,1.36.1,"Telephone socket 3 pin 6A",each,123.40
+
+21,1.37.1,"LED bulb 9W 6500K base B22",each,156.70
+22,1.37.2,"LED bulb 14W 6500K base B22",each,234.50
+23,1.38.1,"LED tube light 20W 4ft 6500K",each,456.70
+24,1.39.1,"LED panel light 6W square recess mount",each,567.80
+25,1.40.1,"LED street light 40W with MPPT charger",each,2345.60
+
+26,1.41.1,"Ceiling fan 1200mm sweep BLDC",each,1567.80
+27,1.42.1,"Exhaust fan 150mm sweep heavy duty",each,789.40
+28,1.43.1,"Wall fan 400mm sweep high speed",each,1234.50
+29,1.44.1,"Fresh air fan 250mm sweep",each,1678.90
+
+30,1.45.1,"MCB DB 30kA SP 6 way double door",each,2345.60
+31,1.46.1,"Changeover switch 4 pole 63A",each,2789.40
+32,1.47.1,"RCCB 40A 30mA sensitivity 240V",each,1567.80
+
+33,2.1.1,"Earthing with G.I. pipe 40mm dia 4.5m long",each,5678.90
+34,2.2.1,"Chemical earthing with 80mm dia electrode",each,11234.50
+35,2.3.1,"Lightning conductor 8SWG G.I. strip",metre,145.60
+36,2.4.1,"Lightning finial 300mm copper",each,4567.80
+
+37,3.1.1,"PVC insulated copper busbar 100A",metre,2345.60
+38,3.2.1,"MCCB 100A FP TP 25kA 415V",each,5678.90
+39,3.3.1,"Busbar chamber 200A double door",each,7890.40
+
+40,4.1.1,"LT panel 100kVA floor mounting",each,234560.00
+41,4.2.1,"APFC panel 50kVAr automatic",each,45678.90
+
+42,5.1.1,"Fire alarm panel addressable 2 loop",each,112345.60
+43,5.2.1,"Smoke detector conventional",each,1456.70
+44,5.3.1,"Heat detector rate of rise type",each,1234.50
+45,5.4.1,"Manual call point weather proof",each,1678.90
+46,5.5.1,"Hooter siren 24V DC 100dB",each,2345.60
+
+47,6.1.1,"PA system column speaker 6W 100V line",each,789.40
+48,6.2.1,"PA system horn speaker 20W 100V line",each,1456.70
+49,6.3.1,"PA amplifier 100W with 16 ohm output",each,5678.90
+
+50,7.1.1,"CAT6 UTP cable PVC insulated",metre,45.60
+51,7.2.1,"CAT6 STP cable PVC insulated",metre,78.90
+52,7.3.1,"LAN socket RJ45 CAT6 flush mount",each,234.60
+
+53,8.1.1,"Telephone cable 2 pair PE insulated",metre,56.70
+54,8.2.1,"RJ11 telephone socket flush mount",each,123.40
+
+55,9.1.1,"CCTV camera 2MP dome type IR 20m",each,3456.70
+56,9.2.1,"CCTV camera 4MP bullet type IR 30m",each,4567.80
+57,9.3.1,"NVR 8 channel 4K 2TB HDD",each,23456.00
+58,9.4.1,"CAT6 cable for CCTV 305m box",box,5678.90
+
+59,10.1.1,"Video door phone 7 inch TFT indoor unit",set,11234.50
+60,10.2.1,"Video door phone outdoor camera unit",each,5678.90
+
+61,11.1.1,"Access control RFID reader",each,4567.80
+62,11.2.1,"Electromagnetic lock 500kg holding",each,2345.60
