@@ -413,4 +413,3 @@ class ElecEngine:
             branch_earth_length=round(branch_len, 2),
             meta=meta_out,
         )
-```
