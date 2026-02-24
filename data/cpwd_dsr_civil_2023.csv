@@ -1,1 +1,67 @@
+S.No,DSR Code,Description,Unit,Rate
+1,2.8.1,"Earthwork excavation foundation trench",cum,260.30
+2,2.1.1,"Surface excavation 30cm depth all soil",sqm,129.85
+3,2.6.1,"Excavation mechanical all soil areas",cum,177.50
+4,2.31,"Clearing jungle rank vegetation",sqm,17.60
+5,2.25,"Filling excavated earth trenches",cum,196.00
 
+6,3.1.1,"PCC 1:5:10 foundation base",cum,4205.45
+7,3.1.2,"PCC 1:4:8 foundation base",cum,4512.30
+8,3.4.1,"PCC 1:1.5:3 foundation",cum,5678.90
+9,3.5.1,"PCC M20 grade nominal mix",cum,5987.20
+10,3.6.1,"PCC M25 grade nominal mix",cum,6456.70
+
+11,3.10.1,"Formwork for plain surfaces",sqm,456.70
+12,3.10.2,"Formwork for sides of beams",sqm,567.80
+13,3.10.3,"Formwork for sides of columns",sqm,678.90
+14,3.10.5,"Formwork for bottom of slabs",sqm,345.60
+
+15,4.1.1,"Brickwork FB non modular foundation",cum,5234.60
+16,4.1.2,"Brickwork superstructure FB bricks",cum,5467.85
+17,4.2.1,"Modular bricks class 7.5 N/mm2",cum,5567.80
+18,4.3.1,"Fly ash brickwork foundation",cum,4890.40
+19,4.4.1,"Half brick masonry foundation",sqm,1567.80
+
+20,5.1.1,"RR masonry foundation uncoursed",cum,4132.40
+21,5.2.1,"Ashlar stone superstructure",cum,6789.20
+
+22,6.1.1,"12mm cement plaster 1:6 fair face",sqm,185.40
+23,6.1.2,"15mm cement plaster 1:6 walls",sqm,198.65
+24,6.2.1,"12mm cement plaster 1:4 rough side",sqm,210.50
+25,6.3.1,"Neat cement punning walls",sqm,45.20
+26,6.5.1,"External plaster 15mm 1:4 cement",sqm,234.60
+
+27,7.1.1,"Damp proof course 50mm thick",sqm,456.70
+28,7.2.1,"Integral water proofing compound",sqm,123.40
+
+29,9.2.1,"Cement concrete floor 40mm thick",sqm,345.60
+30,9.3.1,"Cement concrete floor 25mm thick",sqm,256.40
+31,9.4.1,"Granolithic concrete flooring",sqm,378.90
+32,9.5.1,"Marble chipping flooring 25mm thick",sqm,567.80
+33,9.1.1,"Neat cement finishing walls",sqm,45.20
+
+34,10.1.1,"Premium acrylic emulsion painting",sqm,156.80
+35,10.2.1,"Plastic emulsion paint walls",sqm,134.50
+36,10.3.1,"Oil bound distemper painting",sqm,123.40
+37,10.4.1,"Exterior acrylic smooth paint",sqm,167.80
+38,10.5.1,"Wall care putty painting prep",sqm,189.40
+
+39,11.1.1,"Providing false ceiling with gypsum board",sqm,1562.30
+40,11.2.1,"Providing false ceiling with PVC grid tile",sqm,1345.60
+
+41,12.1.1,"Vitrified floor tiles 600x600mm",sqm,1245.60
+42,12.2.1,"Ceramic wall tiles 450x300mm",sqm,890.45
+43,12.3.1,"Vitrified tiles 8mm polished",sqm,1325.60
+44,12.5.1,"Digital printed ceramic tiles",sqm,1567.80
+45,12.7.1,"Granite flooring Black Galaxy",sqm,3567.90
+46,12.9.1,"PVC vinyl floor covering",sqm,456.20
+
+47,22.1.1,"Chicken mesh plaster reinforcement",sqm,156.80
+48,23.1.1,"Precast RCC loft slab 75mm thick",sqm,2345.60
+
+49,13.2.1,"European WC vitreous china",each,3456.20
+50,13.42.1,"Wash basin CI brackets vitreous",each,1567.80
+51,13.7.1,"Urinal full length vitreous",each,1567.80
+52,13.16.1,"P.V.C. nahani trap 100x75mm",each,256.40
+
+53,15.8.1,"P.V.C. floor trap 150x150mm",each,456.70
