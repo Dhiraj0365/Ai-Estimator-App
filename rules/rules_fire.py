@@ -1,6 +1,3 @@
-```python
-# rules/rules_fire.py
-
 from __future__ import annotations
 
 """
