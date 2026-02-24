@@ -1,6 +1,3 @@
-```python
-# engines/fire_engine.py
-
 """
 Fire-Fighting Estimation Engine (Wet Systems & Basic Fire Alarm)
 
