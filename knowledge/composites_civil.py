@@ -476,4 +476,3 @@ def expand_work_package(
         lines.append(line)
 
     return lines
-```
