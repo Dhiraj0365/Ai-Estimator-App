@@ -171,4 +171,3 @@ def test_steel_slab_single_layer():
     res = IS1200Engine.steel_slab_single_layer(5.0, 4.0, 12.0, 150.0)
     assert res["gross"] == pytest.approx(120.0, rel=1e-2)
     assert res["net"] == pytest.approx(120.0, rel=1e-2)
-```
