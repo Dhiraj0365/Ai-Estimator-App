@@ -435,4 +435,3 @@ PHASE_GROUPS: Dict[str, list[str]] = {
 # Filter PHASE_GROUPS to only include keys that actually exist in DSR
 for phase, keys in list(PHASE_GROUPS.items()):
     PHASE_GROUPS[phase] = [k for k in keys if k in CPWD_BASE_DSR_2023]
-```
