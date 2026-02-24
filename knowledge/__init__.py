@@ -1,5 +1,3 @@
-# knowledge/__init__.py
-
 """
 Knowledge base: DSR/SoR master data & composite work packages.
 
