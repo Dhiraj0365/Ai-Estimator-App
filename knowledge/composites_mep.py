@@ -481,4 +481,3 @@ def expand_mep_package(
         lines.append(line)
 
     return lines
-```
