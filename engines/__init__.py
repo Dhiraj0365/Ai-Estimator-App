@@ -1,5 +1,3 @@
-# engines/__init__.py
-
 """
 Measurement & discipline-specific engines.
 
