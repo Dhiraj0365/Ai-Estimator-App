@@ -561,4 +561,3 @@ class FireEngine:
             power_kw=round(p_motor, 1),
             meta=meta_out,
         )
-```
