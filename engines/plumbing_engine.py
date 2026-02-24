@@ -455,4 +455,3 @@ class PlumbingEngine:
             other_fixtures=other,
             meta=meta_out,
         )
-```
