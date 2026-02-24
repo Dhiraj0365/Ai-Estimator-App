@@ -1,6 +1,3 @@
-```python
-# tests/test_is1200_civil.py
-
 from __future__ import annotations
 
 import math
