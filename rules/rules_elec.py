@@ -358,4 +358,3 @@ def run_elec_rules(items: Sequence[Any]) -> List[RuleResult]:
             # Fail-safe: ignore individual rule failure and continue.
             continue
     return all_results
-```
