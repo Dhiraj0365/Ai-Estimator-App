@@ -1,3 +1,4 @@
+```python
 # knowledge/dsr_master.py
 
 from __future__ import annotations
@@ -6,16 +7,20 @@ from __future__ import annotations
 DSR / SoR master loader for the estimator.
 
 This module:
-- Loads CPWD (and later State) DSR/SoR data from CSV.
+- Loads CPWD and (optionally) State SoR Civil + Electrical data from CSV.
 - Normalises field names.
-- Derives item_key = "Description (code)".
+- Derives item_key = "Description (code)" when not provided.
 - Guesses category, measure_type, measurement_rule, discipline when
   not explicitly provided.
 - Exposes:
-    CPWD_BASE_DSR_2023 : dict[item_key -> raw record dict]
+    CPWD_BASE_DSR_2023 : dict[item_key -> record]  (default CPWD source)
     ITEMS              : dict[item_key -> core.models.Item]
+    RATE_SOURCES       : dict[source_name -> dict[item_key -> record]]
     LOCATION_INDICES   : city -> cost index
-    PHASE_GROUPS       : phase -> list[item_key]  (for UI selectbox)
+    PHASE_GROUPS       : phase -> list[item_key]  (for SOQ selectbox)
+
+It is UI‑agnostic and can be imported from your Streamlit app and
+composite modules.
 """
 
 import pandas as pd
@@ -26,7 +31,7 @@ from core.models import Item
 
 
 # =============================================================================
-# LOCATION INDICES – you can extend/update these as needed
+# LOCATION INDICES – adjust as needed
 # =============================================================================
 
 LOCATION_INDICES: Dict[str, float] = {
@@ -44,21 +49,23 @@ LOCATION_INDICES: Dict[str, float] = {
     "Kanpur": 101.0,
 }
 
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
 
 # =============================================================================
-# Helper functions to classify items from DSR Code + Description
+# Category / type / rule / discipline guessers
 # =============================================================================
 
 def _guess_category(code: str, desc: str) -> str:
     """
     Rough category guess based on DSR Code and some keyword hints.
 
-    You can refine this mapping over time.
+    This is shared across CPWD/State SoR; refine as needed.
     """
     code = str(code).strip()
     d = desc.lower()
 
-    # Earthwork (chapter 2.xxx etc.)
+    # Earthwork (chapter 2)
     if code.startswith("2.8.") or code.startswith("2.6.") or code.startswith("2.7.") or code.startswith("2.10."):
         return "earthwork"
     if code.startswith("2.1."):
@@ -70,8 +77,8 @@ def _guess_category(code: str, desc: str) -> str:
     if code.startswith("2.31"):
         return "site_clearance"
 
-    # Carriage / transport (chapter 1)
-    if code.startswith("1.1") or code.startswith("1.2") or code.startswith("220") or code.startswith("22"):
+    # Carriage / transport (1.x, 22xx, 23xx etc.)
+    if code.startswith("1.1") or code.startswith("1.2") or code.startswith("22") or code.startswith("23"):
         if "carriage" in d or "lead" in d:
             return "carriage"
 
@@ -83,11 +90,13 @@ def _guess_category(code: str, desc: str) -> str:
     if code.startswith("4."):
         return "brickwork"
 
-    # Stone masonry (chapter 5)
+    # Stone masonry (chapter 5) vs Fire alarm (also 5.x in E&M)
     if code.startswith("5."):
+        if "detector" in d or "alarm" in d or "hooter" in d or "panel" in d:
+            return "fire_alarm"
         return "stone_masonry"
 
-    # Plaster, DPC, finishing (chapter 6,7,9)
+    # Plaster, DPC, flooring (6,7,9)
     if code.startswith("6."):
         return "plaster"
     if code.startswith("7."):
@@ -113,7 +122,7 @@ def _guess_category(code: str, desc: str) -> str:
             return "stone_flooring"
         return "finishing"
 
-    # Sanitary / CP fittings / pipes (chapters 13,14,15)
+    # Sanitary / CP fittings / pipes (13,14,15)
     if code.startswith("13."):
         return "sanitary"
     if code.startswith("14."):
@@ -135,7 +144,7 @@ def _guess_category(code: str, desc: str) -> str:
     if code.startswith("21."):
         return "ceilings"
 
-    # Electrical / MEP (codes like 1.28.xx, 1.30.xx etc. at bottom)
+    # Electrical (1.xx family)
     if code.startswith("1.28") or code.startswith("1.29") or code.startswith("1.30") or code.startswith("1.31"):
         return "electrical_switchgear"
     if code.startswith("1.32") or code.startswith("1.33") or code.startswith("1.34"):
@@ -144,10 +153,16 @@ def _guess_category(code: str, desc: str) -> str:
         return "electrical_lighting"
     if code.startswith("1.41") or code.startswith("1.42") or code.startswith("1.43") or code.startswith("1.44"):
         return "electrical_fans"
-    if code.startswith("2.1") and "earthing" in d:
+
+    # Earthing / lightning
+    if "earthing" in d or "earth electrode" in d or "lightning conductor" in d:
         return "earthing"
 
-    # High code numbers (87xx, 89xx, etc.) – special materials
+    # Fire alarm (if code not matched)
+    if "fire alarm" in d or "smoke detector" in d or "heat detector" in d or "hooter" in d or "mcp" in d:
+        return "fire_alarm"
+
+    # Special fittings & geosynthetics
     if code.startswith("879") or code.startswith("880") or code.startswith("881") or code.startswith("882") or code.startswith("883") or code.startswith("884"):
         return "ss_fittings"
     if code.startswith("895") or code.startswith("896") or code.startswith("897") or code.startswith("898") or code.startswith("899"):
@@ -180,7 +195,7 @@ def _guess_measurement_rule(code: str, category: str, measure_type: str) -> str:
     if category.startswith("earthwork") and measure_type == "volume":
         return "trench_excavation"
 
-    # Surface earthwork – often just area * depth, but we can treat as volume
+    # Surface earthwork
     if category == "earthwork_surface":
         return "volume"
 
@@ -188,7 +203,7 @@ def _guess_measurement_rule(code: str, category: str, measure_type: str) -> str:
     if category == "brickwork" and measure_type == "volume":
         return "brickwork_wall"
 
-    # Stone masonry – same idea
+    # Stone masonry – same as brick, if needed
     if category == "stone_masonry" and measure_type == "volume":
         return "stone_masonry_wall"
 
@@ -204,67 +219,110 @@ def _guess_measurement_rule(code: str, category: str, measure_type: str) -> str:
     if category == "false_ceiling" and measure_type == "area":
         return "ceiling_finish_area"
 
-    # Default: simple volume/area/length
+    # Default
     return "volume"
 
 
 def _guess_discipline(category: str, code: str) -> str:
     """
-    Rough discipline split: 'civil' vs 'electrical' vs 'mep'.
+    Rough discipline split: 'civil' vs 'electrical' vs 'plumbing' vs 'fire' vs 'hvac'.
     """
-    if category.startswith("electrical") or code.startswith("1.3") or code.startswith("1.4"):
+    category = category.lower()
+    code = code.strip()
+
+    if category.startswith("electrical"):
         return "electrical"
     if category in ("pipes", "sanitary", "cp_fittings"):
         return "plumbing"
+    if category in ("fire_alarm",):
+        return "electrical"  # fire alarm is usually under electrical contract
     # Most others: civil
     return "civil"
 
 
 # =============================================================================
-# Loader: from a SINGLE DSR CSV into CPWD_BASE_DSR_2023 and ITEMS
+# Generic CSV loader
 # =============================================================================
 
-def load_cpwd_dsr_2023(csv_name: str = "cpwd_dsr_2023.csv") -> Dict[str, Dict[str, Any]]:
+def _load_dsr_csv(csv_name: str, default_discipline: str) -> Dict[str, Dict[str, Any]]:
     """
-    Load CPWD DSR (Civil + MEP) from a CSV kept in data/cpwd_dsr_2023.csv.
+    Load a DSR/SoR CSV from data/ folder.
 
-    Expected minimal columns (matching what you pasted):
+    Supports TWO styles:
 
+    1) RAW 5-column CPWD/SoR format:
         S.No, DSR Code, Description, Unit, Rate
+       → we derive:
+        item_key, category, type, measurement_rule, discipline
 
-    Optional extra columns (ignored or used if present):
-        category, type, measurement_rule, discipline, item_key
+    2) Enriched format with explicit columns:
+        item_key, code, description, unit, rate,
+        category, type, measurement_rule, discipline
 
-    We normalise to:
-        item_key, code, description, unit, rate, category, type,
-        measurement_rule, discipline
+    Returns a dict:
+        { item_key: {code, description, unit, rate,
+                     category, type, measurement_rule, discipline} }
     """
-    data_path = Path(__file__).resolve().parent.parent / "data" / csv_name
-    df = pd.read_csv(data_path)
+    path = DATA_DIR / csv_name
+    if not path.exists():
+        # Optional source – simply return empty
+        return {}
 
-    # Try to detect column names in a robust way
-    cols = {c.lower().strip(): c for c in df.columns}
+    df = pd.read_csv(path)
+    cols_lower = {c.lower().strip(): c for c in df.columns}
 
-    code_col = cols.get("dsr code", cols.get("code"))
-    desc_col = cols.get("description")
-    unit_col = cols.get("unit")
-    rate_col = cols.get("rate")
+    # Enriched case: has item_key column
+    if "item_key" in cols_lower:
+        key_col = cols_lower["item_key"]
+        code_col = cols_lower.get("code")
+        desc_col = cols_lower.get("description")
+        unit_col = cols_lower.get("unit")
+        rate_col = cols_lower.get("rate")
+        cat_col = cols_lower.get("category")
+        type_col = cols_lower.get("type")
+        rule_col = cols_lower.get("measurement_rule")
+        disc_col = cols_lower.get("discipline")
+
+        items: Dict[str, Dict[str, Any]] = {}
+        for _, row in df.iterrows():
+            item_key = str(row[key_col]).strip()
+            if not item_key:
+                continue
+            code = str(row[code_col]).strip() if code_col else ""
+            desc = str(row[desc_col]).strip() if desc_col else ""
+            unit = str(row[unit_col]).strip() if unit_col else ""
+            rate = float(row[rate_col]) if rate_col else 0.0
+
+            category = str(row[cat_col]).strip() if cat_col else _guess_category(code, desc)
+            mtype = str(row[type_col]).strip() if type_col else _guess_type(unit)
+            mrule = str(row[rule_col]).strip() if rule_col else _guess_measurement_rule(code, category, mtype)
+            disc = str(row[disc_col]).strip() if disc_col else _guess_discipline(category, code)
+
+            items[item_key] = {
+                "code": code,
+                "description": desc,
+                "unit": unit,
+                "rate": rate,
+                "category": category,
+                "type": mtype,
+                "measurement_rule": mrule,
+                "discipline": disc or default_discipline,
+            }
+        return items
+
+    # RAW CPWD-style case: 5 columns
+    code_col = cols_lower.get("dsr code", cols_lower.get("code"))
+    desc_col = cols_lower.get("description")
+    unit_col = cols_lower.get("unit")
+    rate_col = cols_lower.get("rate")
 
     if not code_col or not desc_col or not unit_col or not rate_col:
         raise ValueError(
-            f"CSV {csv_name} must contain at least columns: 'DSR Code', 'Description', 'Unit', 'Rate'. "
-            f"Found columns: {list(df.columns)}"
+            f"{csv_name} must contain either 'item_key' or at least "
+            "'DSR Code', 'Description', 'Unit', 'Rate'. Found: {list(df.columns)}"
         )
 
-    # Optional existing classification columns
-    item_key_col = cols.get("item_key")
-    cat_col = cols.get("category")
-    type_col = cols.get("type")
-    rule_col = cols.get("measurement_rule")
-    disc_col = cols.get("discipline")
-
     items: Dict[str, Dict[str, Any]] = {}
-
     for _, row in df.iterrows():
         code = str(row[code_col]).strip()
         desc = str(row[desc_col]).strip()
@@ -274,35 +332,12 @@ def load_cpwd_dsr_2023(csv_name: str = "cpwd_dsr_2023.csv") -> Dict[str, Dict[st
         if not code or not desc:
             continue
 
-        # item_key: from column if present, else Description (code)
-        if item_key_col:
-            item_key = str(row[item_key_col]).strip()
-        else:
-            item_key = f"{desc} ({code})"
+        item_key = f"{desc} ({code})"
 
-        # category
-        if cat_col:
-            category = str(row[cat_col]).strip()
-        else:
-            category = _guess_category(code, desc)
-
-        # type
-        if type_col:
-            measure_type = str(row[type_col]).strip()
-        else:
-            measure_type = _guess_type(unit)
-
-        # measurement_rule
-        if rule_col:
-            measurement_rule = str(row[rule_col]).strip()
-        else:
-            measurement_rule = _guess_measurement_rule(code, category, measure_type)
-
-        # discipline
-        if disc_col:
-            discipline = str(row[disc_col]).strip()
-        else:
-            discipline = _guess_discipline(category, code)
+        category = _guess_category(code, desc)
+        mtype = _guess_type(unit)
+        mrule = _guess_measurement_rule(code, category, mtype)
+        disc = _guess_discipline(category, code)
 
         items[item_key] = {
             "code": code,
@@ -310,18 +345,57 @@ def load_cpwd_dsr_2023(csv_name: str = "cpwd_dsr_2023.csv") -> Dict[str, Dict[st
             "unit": unit,
             "rate": rate,
             "category": category,
-            "type": measure_type,
-            "measurement_rule": measurement_rule,
-            "discipline": discipline,
+            "type": mtype,
+            "measurement_rule": mrule,
+            "discipline": disc or default_discipline,
         }
 
     return items
 
 
-# Load on import
-CPWD_BASE_DSR_2023: Dict[str, Dict[str, Any]] = load_cpwd_dsr_2023()
+# =============================================================================
+# Load all available sources
+# =============================================================================
 
-# Build Item objects for easier use
+# CPWD – Civil + Electrical
+CPWD_DSR_CIVIL_2023: Dict[str, Dict[str, Any]] = _load_dsr_csv(
+    "cpwd_dsr_civil_2023.csv", default_discipline="civil"
+)
+CPWD_DSR_ELECT_2023: Dict[str, Dict[str, Any]] = _load_dsr_csv(
+    "cpwd_dsr_elect_2023.csv", default_discipline="electrical"
+)
+
+CPWD_ALL_2023: Dict[str, Dict[str, Any]] = {
+    **CPWD_DSR_CIVIL_2023,
+    **CPWD_DSR_ELECT_2023,
+}
+
+# OPTIONAL: State SoR (Civil + Electrical) – only used if CSVs exist
+STATE_SOR_CIVIL_2023: Dict[str, Dict[str, Any]] = _load_dsr_csv(
+    "state_sor_civil_2023.csv", default_discipline="civil"
+)
+STATE_SOR_ELECT_2023: Dict[str, Dict[str, Any]] = _load_dsr_csv(
+    "state_sor_elect_2023.csv", default_discipline="electrical"
+)
+
+STATE_SOR_ALL_2023: Dict[str, Dict[str, Any]] = {
+    **STATE_SOR_CIVIL_2023,
+    **STATE_SOR_ELECT_2023,
+} if STATE_SOR_CIVIL_2023 or STATE_SOR_ELECT_2023 else {}
+
+
+# RATE SOURCES – master datasets keyed by name
+RATE_SOURCES: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "CPWD DSR 2023 (Civil + Elect)": CPWD_ALL_2023,
+}
+if STATE_SOR_ALL_2023:
+    RATE_SOURCES["State SoR 2023 (Civil + Elect)"] = STATE_SOR_ALL_2023
+
+
+# DEFAULT SOURCE – used everywhere in app unless you add a selector
+CPWD_BASE_DSR_2023: Dict[str, Dict[str, Any]] = CPWD_ALL_2023
+
+# Build Item objects for CPWD base source
 ITEMS: Dict[str, Item] = {
     key: Item.from_dsr_record(key, rec)
     for key, rec in CPWD_BASE_DSR_2023.items()
@@ -329,24 +403,8 @@ ITEMS: Dict[str, Item] = {
 
 
 # =============================================================================
-# PHASE GROUPS – minimal, using your actual simplified foundation/finish items
+# PHASE GROUPS – for SOQ UI (use item_key strings)
 # =============================================================================
-# These are used by the UI selectbox in SOQ Tab. You can expand over time.
-#
-# They rely on the simplified descriptions that appear near the end of your
-# dataset, e.g.:
-#   1040,2.8.1,"Earthwork excavation foundation trench",cum,260.30
-#   1043,3.1.1,"PCC 1:5:10 foundation base",cum,4205.45
-#   1044,4.1.1,"Brickwork FB non modular foundation",cum,5234.60
-#   1046,6.1.1,"12mm cement plaster 1:6 fair face",sqm,185.40
-#   1049,12.1.1,"Vitrified floor tiles 600x600mm",sqm,1245.60
-#   1048,10.1.1,"Premium acrylic emulsion painting",sqm,156.80
-#
-# Loader will have created item_keys like:
-#   "Earthwork excavation foundation trench (2.8.1)"
-#   "PCC 1:5:10 foundation base (3.1.1)"
-#   ...
-
 
 PHASE_GROUPS: Dict[str, list[str]] = {
     "1️⃣ SUBSTRUCTURE": [
@@ -377,8 +435,7 @@ PHASE_GROUPS: Dict[str, list[str]] = {
     ],
 }
 
-# Filter PHASE_GROUPS to only include keys that actually exist in data
+# Filter PHASE_GROUPS to only include keys that actually exist in DSR
 for phase, keys in list(PHASE_GROUPS.items()):
-    PHASE_GROUPS[phase] = [
-        k for k in keys if k in CPWD_BASE_DSR_2023
-    ]
+    PHASE_GROUPS[phase] = [k for k in keys if k in CPWD_BASE_DSR_2023]
+```
