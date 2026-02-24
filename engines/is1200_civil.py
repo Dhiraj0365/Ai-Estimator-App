@@ -1,3 +1,4 @@
+```python
 # engines/is1200_civil.py
 
 """
@@ -12,9 +13,10 @@ Scope (major building works):
 - Concrete & RCC (generic volumes, isolated footings)
 - Masonry (brick/stone walls with opening deductions)
 - Plaster / Paint (wall & ceiling finishes with IS-1200 style rules)
-- Flooring / Tiling (floor areas with cut-outs)
+- Flooring / Tiling (floor areas with cut-outs + wastage)
 - Formwork / Shuttering (columns, beams, slabs)
 - Reinforcement helpers (kg from volume or bar dia/spacing)
+- Staircase basic volume
 
 Design goals:
 - Technically sound, audit-friendly quantities.
@@ -153,20 +155,6 @@ class IS1200Engine:
         - Earthwork (simple vertical sides)
         - PCC / RCC members where no complex shape is needed
         - Brickwork block volume (if you don't need opening logic)
-
-        Parameters
-        ----------
-        L, B, D : float
-            Length, breadth, depth (m).
-        deductions : float, optional
-            Deductions in m³ (already combined).
-        unit : str
-            Output unit (default 'cum').
-
-        Returns
-        -------
-        dict
-            {gross, deductions, additions, net, pct}
         """
         L = max(L, 0.0)
         B = max(B, 0.0)
@@ -207,10 +195,6 @@ class IS1200Engine:
             avg_breadth = (breadth_bottom + top_breadth) / 2
 
         For vertical sides, side_slope_h_over_v = 0.
-
-        Returns
-        -------
-        dict : {gross, deductions, additions, net}
         """
         length = max(length, 0.0)
         breadth_bottom = max(breadth_bottom, 0.0)
@@ -268,8 +252,6 @@ class IS1200Engine:
 
         gross = length × breadth × height
         additions: factor for compaction allowance (e.g. 1.05 for 5% extra)
-
-        Returns dict {gross, deductions, additions, net}
         """
         length = max(length, 0.0)
         breadth = max(breadth, 0.0)
@@ -299,12 +281,6 @@ class IS1200Engine:
     ) -> Dict[str, float]:
         """
         RCC volume of isolated footing + pedestal, if provided.
-
-        Parameters
-        ----------
-        L, B, D : footing length, breadth, depth (m)
-        pedestal_L, pedestal_B, pedestal_H : pedestal size (m)
-        deductions : volume deductions (e.g. pockets, bolts) if any
         """
         v_foot = max(L, 0.0) * max(B, 0.0) * max(D, 0.0)
         v_ped = max(pedestal_L, 0.0) * max(pedestal_B, 0.0) * max(pedestal_H, 0.0)
@@ -331,8 +307,6 @@ class IS1200Engine:
         - No deduction for individual openings up to small_opening_limit
           (IS 1200 Part 5: small apertures).
         - Full deduction for larger openings: area × thickness.
-
-        openings: list of dicts {"w": width_m, "h": height_m, "n": count}
         """
         length = max(length, 0.0)
         thickness = max(thickness, 0.0)
@@ -397,8 +371,6 @@ class IS1200Engine:
           * small_opening_limit < A <= medium_opening_limit
                 → deduct A for ONE face only (for both‑side finish).
           * A > medium_opening_limit → deduct A × sides (full opening on all sides).
-
-        openings: list of dicts {"w": width_m, "h": height_m, "n": count}
         """
         length = max(length, 0.0)
         height = max(height, 0.0)
@@ -571,7 +543,7 @@ class IS1200Engine:
         return _round_for_unit(area, unit)
 
     # ---------------------------------------------------------------------
-    # STAIRCASE (BASIC) – WAIST SLAB + STEPS
+    # STAIRCASE (BASIC) – WAIST SLAB + LANDINGS
     # ---------------------------------------------------------------------
     @staticmethod
     def staircase_waist_slab_volume(
@@ -610,18 +582,6 @@ class IS1200Engine:
         """
         Convenience function for RCC estimation when you use
         empirical kg of steel per cubic metre of RCC.
-
-        Parameters
-        ----------
-        concrete_volume_cum : float
-            Net concrete volume in m³.
-        kg_per_cum : float
-            Assumed steel consumption in kg/m³.
-
-        Returns
-        -------
-        dict : {gross, deductions, additions, net}
-               (all values same, in kg)
         """
         concrete_volume_cum = max(concrete_volume_cum, 0.0)
         kg_per_cum = max(kg_per_cum, 0.0)
@@ -676,14 +636,13 @@ class IS1200Engine:
         - weight from steel_from_bars()
 
         NOTE:
-        This is a very simplified helper for quick estimation;
-        actual detailing may differ.
+        This is a simplified helper for quick estimation; actual detailing
+        may differ.
         """
         slab_length = max(slab_length, 0.0)
         slab_width = max(slab_width, 0.0)
         spacing_mm = max(spacing_mm, 1.0)
 
-        # how many spaces across width
         n_bars = int(slab_width * 1000.0 // spacing_mm) + 1
         if n_bars <= 0:
             mr = MeasureResult(gross=0.0, deductions=0.0, unit=unit)
@@ -735,3 +694,4 @@ if __name__ == "__main__":
         "Steel from bars:",
         IS1200Engine.steel_from_bars(dia_mm=12, length_m=6, count=10),
     )
+```
