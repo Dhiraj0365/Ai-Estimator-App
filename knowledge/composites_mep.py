@@ -1,6 +1,3 @@
-```python
-# knowledge/composites_mep.py
-
 from __future__ import annotations
 
 """
