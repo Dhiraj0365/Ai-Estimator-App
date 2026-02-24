@@ -1,6 +1,3 @@
-```python
-# rules/rules_plumbing.py
-
 from __future__ import annotations
 
 """
