@@ -432,4 +432,3 @@ def run_civil_rules(items: Sequence[Any]) -> List[RuleResult]:
             # Fail-safe: ignore rule failure, continue with others
             continue
     return all_results
-```
