@@ -1,6 +1,3 @@
-```python
-# engines/hvac_engine.py
-
 """
 HVAC Estimation Engine (Air Conditioning & Ventilation)
 
