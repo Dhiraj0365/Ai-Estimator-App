@@ -1,6 +1,3 @@
-```python
-# knowledge/composites_civil.py
-
 from __future__ import annotations
 
 """
