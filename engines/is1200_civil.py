@@ -1,6 +1,3 @@
-```python
-# engines/is1200_civil.py
-
 """
 IS 1200 Measurement Engine – Building Works (Civil)
 
