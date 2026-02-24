@@ -1,5 +1,3 @@
-# rules/__init__.py
-
 """
 Rules engines for all disciplines.
 
