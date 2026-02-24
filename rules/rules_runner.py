@@ -147,4 +147,3 @@ def group_results_by_level(results: List[RuleResult]) -> Dict[str, List[RuleResu
         lvl = (r.level or "INFO").upper()
         out.setdefault(lvl, []).append(r)
     return out
-```
