@@ -1,6 +1,3 @@
-```python
-# knowledge/dsr_master.py
-
 from __future__ import annotations
 
 """
