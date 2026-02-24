@@ -691,4 +691,3 @@ if __name__ == "__main__":
         "Steel from bars:",
         IS1200Engine.steel_from_bars(dia_mm=12, length_m=6, count=10),
     )
-```
