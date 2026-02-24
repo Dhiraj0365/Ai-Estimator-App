@@ -468,4 +468,3 @@ class HvacEngine:
             insulation_area_sqm=round(insulation_area, 2),
             meta=meta_out,
         )
-```
