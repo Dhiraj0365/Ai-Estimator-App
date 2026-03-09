@@ -65,3 +65,30 @@ S.No,DSR Code,Description,Unit,Rate
 52,13.16.1,"P.V.C. nahani trap 100x75mm",each,256.40
 
 53,15.8.1,"P.V.C. floor trap 150x150mm",each,456.70
+54,5.0.1,"Steel reinforcement for R.C.C. work Fe500",kg,78.00
+55,10.1,"Supplying Thermo-Mechanically Treated bars of grade Fe-500D or more",kg,78.00
+56,10.2,"Steel reinforcement for R.C.C. work including straightening, cutting, bending, binding, carriage of steel upto floor five level, placing in position, tying with binding wire complete including cost of binding wire",kg,95.40
+57,10.3,"Steel reinforcement for R.C.C. work-High yield strength deformed bars grade Fe-500D or more including straightening, cutting, bending, binding, carriage of steel upto floor five level, placing in position, tying with binding wire complete including cost of binding wire",kg,95.40
+58,10.4,"Extra for steel reinforcement work above floor five level for every four floors or part thereof",kg,4.80
+59,10.5,"Cranking of bars not exceeding 300 mm length for each cranking in reinforcement including overlapping and lapping where required",kg,4.80
+60,10.6,"Extra for bending and binding of steel reinforcement in difficult situations such as in arches, staircases, vertical fins, curved surfaces etc",kg,4.80
+61,10.7,"Extra for steel reinforcement work in mechanical works such as in hangers, brackets, supports, clamps etc",kg,9.60
+62,10.8,"Extra for steel reinforcement work in connection with raking struts, guard rails, louvers etc",kg,9.60
+63,10.9,"Structural steel work in single sections such as joists, channels, angles, Tee-bars etc. welded together including cleaning and painting with primer of approved quality",kg,97.40
+64,10.10,"Structural steel work riveted/bolted/welded in built-up sections including cleaning and painting with primer of approved quality",kg,105.40
+65,10.11,"Structural steel work welded in built-up sections including cleaning and painting with primer of approved quality",kg,101.40
+66,10.12,"Supplying structural steel conforming to IS 2062 Grade A",kg,82.60
+67,10.13,"Supplying structural steel conforming to IS 2062 Grade B",kg,83.60
+68,10.14,"Structural steel work in single sections such as joists, channels, angles, Tee-bars etc. riveted or bolted including cleaning and painting with primer of approved quality",kg,97.40
+69,10.15,"Providing and fixing iron work welded in built up sections/ framed work, such as grills, gates, fanlights, guard bar, railing etc. including applying a coat of primer of approved quality",kg,135.70
+70,10.16,"Providing and fixing hand rail with vertical balusters and/or horizontal rails distinguished from parapet railing by lighter section and simpler construction including applying a coat of primer of approved quality",metre,1208.45
+71,10.17,"Providing and fixing iron work in gates including frames with necessary bolts, nuts, screws etc. complete including applying a coat of primer of approved quality",kg,135.70
+72,10.18,"Providing and fixing iron work in gratings, frames, guard bar, ladder, railings, brackets, gates and similar works including applying a coat of primer of approved quality",kg,135.70
+73,10.19,"Providing and fixing mild steel wire fabric 2 mm thick weighing 3.55 kg/ sqm or more",sqm,178.55
+74,10.20,"Providing and fixing expanded metal of grade up to 1.25 mm thick",sqm,178.55
+75,10.21,"Providing and fixing expanded metal of grade above 1.25 mm thick",sqm,267.80
+76,10.22,"Providing and fixing M.S. grill of approved pattern made of M.S. square bars including necessary fixing arrangement complete with applying a coat of primer of approved quality",kg,135.70
+77,10.23,"Providing and fixing M.S. grill made of M.S. flats including necessary fixing arrangement complete with applying a coat of primer of approved quality",kg,135.70
+78,10.24,"Providing and fixing M.S. flats grills in specified pattern including necessary fixing arrangement complete with applying a coat of primer of approved quality",kg,135.70
+79,10.25,"Providing and fixing M.S. square bar grills in specified pattern including necessary fixing arrangement complete with applying a coat of primer of approved quality",kg,135.70
+80,10.26,"Providing and fixing M.S. flats grills in specified pattern including necessary fixing arrangement complete with applying a coat of primer of approved quality",kg,135.70
