@@ -86,6 +86,10 @@ def _guess_category(code: str, desc: str) -> str:
     # Brickwork (chapter 4)
     if code.startswith("4."):
         return "brickwork"
+      
+    # Reinforcement detection, regardless of chapter
+    if "reinforcement" in d and ("r.c.c" in d or "rcc" in d or "r.c.c." in d):
+        return "reinforcement"
 
     # Stone masonry (chapter 5) vs Fire alarm (also 5.x in E&M)
     if code.startswith("5."):
