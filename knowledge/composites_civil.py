@@ -1,3 +1,5 @@
+# knowledge/composites_civil.py
+
 from __future__ import annotations
 
 """
@@ -16,28 +18,17 @@ like:
 
 - "Site clearance & topsoil stripping"
 - "Bulk earthworks (cut & fill)"
-- "Isolated footing (excavation + PCC + RCC + formwork + backfill)"
-- "Brick wall + plaster"
+- "Isolated footing (excavation + PCC + concrete + formwork + backfill)"
+- "Brick wall with plaster"
 - "Floor tiles"
 - "Painting"
+- "RCC columns / beams / slabs"
 
-Usage pattern (UI-agnostic):
+Usage (UI-agnostic):
 
     from knowledge.composites_civil import WORK_PACKAGES_CIVIL, expand_work_package
 
-    context = {
-        "L_foot": 2.0,
-        "B_foot": 2.0,
-        "D_foot": 0.5,
-        "L_exc": 2.4,
-        "B_exc": 2.4,
-        "D_exc": 0.7,
-        "L_blind": 2.2,
-        "B_blind": 2.2,
-        "t_blind": 0.05,
-        "backfill_volume_cum": 4.0,
-    }
-
+    context = {...}
     lines = expand_work_package(
         package_name="Isolated footing (excavation + PCC + concrete + formwork + backfill)",
         context=context,
@@ -45,14 +36,7 @@ Usage pattern (UI-agnostic):
         cost_index=110.0,
     )
 
-    # 'lines' is a list[BOQLine]; the caller can assign IDs and add to a Project or SOQ.
-
-Note:
-- Quantity expressions use Python `eval` over a safe environment that
-  includes: context variables, IS1200Engine, and basic math functions.
-- If a DSR item_key referenced in a package is NOT present in
-  CPWD_BASE_DSR_2023, that component is silently skipped (so you can
-  add/adjust your CSV without breaking everything).
+    # 'lines' is a list[BOQLine]; caller assigns IDs and attaches to Project/SOQ.
 """
 
 from dataclasses import dataclass
@@ -92,11 +76,11 @@ class ComponentLine:
 @dataclass
 class WorkPackage:
     """
-    Logical civil work package (e.g., isolated footing, site clearance).
+    Logical civil work package (e.g., isolated footing, RCC columns).
 
     Attributes
     ----------
-    name          : str   - user-facing name (used as key in WORK_PACKAGES_CIVIL).
+    name          : str   - user-facing name.
     section       : str   - high-level WBS section (e.g. "Earthworks & Foundations").
     default_phase : str   - default phase label for BOQ ("1️⃣ SUBSTRUCTURE", etc.).
     description   : str   - summary of what the package covers.
@@ -134,9 +118,8 @@ def _build_eval_env(context: Dict[str, Any]) -> Dict[str, Any]:
             "round": round,
         }
     )
-    try:  # optional math
+    try:
         import math
-
         env["math"] = math
     except ImportError:
         pass
@@ -144,26 +127,25 @@ def _build_eval_env(context: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # =============================================================================
-# WORK PACKAGES – EARTHWORKS, FOUNDATIONS, BASIC SUPERSTRUCTURE & FINISH
+# WORK PACKAGES – EARTHWORKS, FOUNDATIONS, SUPERSTRUCTURE & FINISHES
 # =============================================================================
 #
 # IMPORTANT:
 # item_key strings MUST match keys generated in CPWD_BASE_DSR_2023, which
 # are of the form: "Description (DSR Code)" as loaded from your CSV.
 #
-# For simplicity, we use the "short" descriptions from the later part of
-# your dataset (around ids 1040+), e.g.:
-#
+# For simplicity, we use the short descriptions from your civil CSV, e.g.:
 #   "Earthwork excavation foundation trench (2.8.1)"
 #   "Surface excavation 30cm depth all soil (2.1.1)"
 #   "PCC 1:5:10 foundation base (3.1.1)"
-#   "Brickwork FB non modular foundation (4.1.1)"
-#   "RR masonry foundation uncoursed (5.1.1)"
-#   "12mm cement plaster 1:6 fair face (6.1.1)"
-#   "Premium acrylic emulsion painting (10.1.1)"
-#   "Vitrified floor tiles 600x600mm (12.1.1)"
-#
-# Make sure your CSV has these descriptions exactly, or adjust the keys below.
+#   "PCC M20 grade nominal mix (3.5.1)"
+#   "PCC M25 grade nominal mix (3.6.1)"
+#   "Formwork for sides of columns (3.10.3)"
+#   "Formwork for sides of beams (3.10.2)"
+#   "Formwork for bottom of slabs (3.10.5)"
+#   "Steel reinforcement for R.C.C. work Fe500 (5.0.1)"
+#   etc.
+# Ensure your CSV descriptions match these exactly.
 
 
 # 1) SITE CLEARANCE & TOPSOIL STRIPPING
@@ -173,14 +155,12 @@ SITE_CLEARANCE_PACKAGE = WorkPackage(
     default_phase="1️⃣ SUBSTRUCTURE",
     description="Clearing jungle/vegetation and stripping topsoil (surface excavation) for the building footprint.",
     components=[
-        # Clearing jungle / vegetation
         ComponentLine(
             role="clearing",
             item_key="Clearing jungle rank vegetation (2.31)",
             quantity_expr="site_area_sqm",  # DSR in sqm
             notes="Clearing jungle including uprooting of rank vegetation, grass, brushwood."
         ),
-        # Topsoil stripping (surface excavation 30cm)
         ComponentLine(
             role="topsoil_stripping",
             item_key="Surface excavation 30cm depth all soil (2.1.1)",
@@ -198,14 +178,12 @@ BULK_EARTHWORKS_PACKAGE = WorkPackage(
     default_phase="1️⃣ SUBSTRUCTURE",
     description="Bulk cut & fill to form building platform, including filling with excavated earth.",
     components=[
-        # CUT – large-area excavation
         ComponentLine(
             role="cut",
             item_key="Excavation mechanical all soil areas (2.6.1)",
             quantity_expr="cut_volume_cum",  # in m³
             notes="Bulk excavation over areas by mechanical means."
         ),
-        # FILL – filling with available excavated earth
         ComponentLine(
             role="fill_with_excavated_earth",
             item_key="Filling excavated earth trenches (2.25)",
@@ -223,60 +201,140 @@ ISOLATED_FOOTING_PACKAGE = WorkPackage(
     default_phase="1️⃣ SUBSTRUCTURE",
     description="Complete cycle for one isolated footing: pit excavation, PCC blinding, footing concrete, formwork, and backfilling.",
     components=[
-        # Excavation (pit)
         ComponentLine(
             role="excavation",
             item_key="Earthwork excavation foundation trench (2.8.1)",
             quantity_expr="IS1200Engine.pit_excavation(L_exc, B_exc, D_exc)['net']",
             notes="Excavation in foundation trenches/pits as per IS 1200; includes getting out soil and disposal within specified lead."
         ),
-        # PCC blinding
         ComponentLine(
             role="pcc_blinding",
             item_key="PCC 1:5:10 foundation base (3.1.1)",
             quantity_expr="L_blind * B_blind * t_blind",
             notes="Plain cement concrete 1:5:10 as levelling course under footing."
         ),
-        # Footing concrete – here using a higher grade cement concrete (user may change item_key to exact RCC item)
         ComponentLine(
             role="concrete_footing",
             item_key="PCC M20 grade nominal mix (3.5.1)",
             quantity_expr="L_foot * B_foot * D_foot",
-            notes="Footing concrete volume; replace with exact RCC item if available in DSR."
+            notes="Footing concrete volume; using M20 grade as RCC concrete item."
         ),
-        # Formwork to footing sides
         ComponentLine(
             role="formwork",
             item_key="Formwork for plain surfaces (3.10.1)",
             quantity_expr="IS1200Engine.formwork_column_area(L_foot, B_foot, D_foot)",
             notes="Approximate shuttering to vertical sides of footing."
         ),
-        # Backfilling around footing
         ComponentLine(
             role="backfill",
             item_key="Filling excavated earth trenches (2.25)",
             quantity_expr="backfill_volume_cum",
-            notes="Filling with excavated earth in layers, watered and rammed."
+            notes="Backfilling with excavated soil in layers and compaction."
         ),
     ],
 )
 
 
-# 4) BRICK WALL (PLINTH / SUPERSTRUCTURE) + INTERNAL PLASTER
+# 4) RCC COLUMNS (CONCRETE + STEEL + FORMWORK)
+RCC_COLUMNS_PACKAGE = WorkPackage(
+    name="RCC columns (concrete + steel + formwork, per floor)",
+    section="Superstructure",
+    default_phase="3️⃣ SUPERSTRUCTURE",
+    description="RCC columns for one floor including concrete, reinforcement and formwork.",
+    components=[
+        ComponentLine(
+            role="column_concrete",
+            item_key="PCC M25 grade nominal mix (3.6.1)",
+            quantity_expr="b_col * d_col * h_col * n_cols",
+            notes="RCC column concrete volume (treat 3.6.1 as structural M25 concrete)."
+        ),
+        ComponentLine(
+            role="column_reinforcement",
+            item_key="Steel reinforcement for R.C.C. work Fe500 (5.0.1)",
+            quantity_expr="IS1200Engine.steel_from_kg_per_cum(b_col * d_col * h_col * n_cols, steel_kg_per_cum_col)['net']",
+            notes="Column reinforcement based on kg/m³ assumption (default ~160 kg/m³)."
+        ),
+        ComponentLine(
+            role="column_formwork",
+            item_key="Formwork for sides of columns (3.10.3)",
+            quantity_expr="IS1200Engine.formwork_column_area(b_col, d_col, h_col) * n_cols",
+            notes="Formwork to all faces of RCC columns."
+        ),
+    ],
+)
+
+
+# 5) RCC BEAMS (CONCRETE + STEEL + FORMWORK)
+RCC_BEAMS_PACKAGE = WorkPackage(
+    name="RCC beams (concrete + steel + formwork, per floor)",
+    section="Superstructure",
+    default_phase="3️⃣ SUPERSTRUCTURE",
+    description="RCC beams for one floor including concrete, reinforcement and formwork.",
+    components=[
+        ComponentLine(
+            role="beam_concrete",
+            item_key="PCC M25 grade nominal mix (3.6.1)",
+            quantity_expr="L_beam * b_beam * d_beam * n_beams",
+            notes="RCC beam concrete volume (treat 3.6.1 as structural M25 concrete)."
+        ),
+        ComponentLine(
+            role="beam_reinforcement",
+            item_key="Steel reinforcement for R.C.C. work Fe500 (5.0.1)",
+            quantity_expr="IS1200Engine.steel_from_kg_per_cum(L_beam * b_beam * d_beam * n_beams, steel_kg_per_cum_beam)['net']",
+            notes="Beam reinforcement based on kg/m³ assumption (default ~120 kg/m³)."
+        ),
+        ComponentLine(
+            role="beam_formwork",
+            item_key="Formwork for sides of beams (3.10.2)",
+            quantity_expr="IS1200Engine.formwork_beam_area(b_beam, d_beam, L_beam) * n_beams",
+            notes="Formwork to 3 faces of RCC beams (bottom + 2 sides)."
+        ),
+    ],
+)
+
+
+# 6) RCC SLAB (CONCRETE + STEEL + FORMWORK)
+RCC_SLAB_PACKAGE = WorkPackage(
+    name="RCC slab (concrete + steel + formwork)",
+    section="Superstructure",
+    default_phase="3️⃣ SUPERSTRUCTURE",
+    description="RCC slab including concrete, reinforcement and soffit formwork.",
+    components=[
+        ComponentLine(
+            role="slab_concrete",
+            item_key="PCC M20 grade nominal mix (3.5.1)",
+            quantity_expr="L_slab * B_slab * t_slab * n_slabs",
+            notes="Slab concrete volume; using M20 as slab concrete item."
+        ),
+        ComponentLine(
+            role="slab_reinforcement",
+            item_key="Steel reinforcement for R.C.C. work Fe500 (5.0.1)",
+            quantity_expr="IS1200Engine.steel_from_kg_per_cum(L_slab * B_slab * t_slab * n_slabs, steel_kg_per_cum_slab)['net']",
+            notes="Slab reinforcement based on kg/m³ assumption (default ~100 kg/m³)."
+        ),
+        ComponentLine(
+            role="slab_formwork",
+            item_key="Formwork for bottom of slabs (3.10.5)",
+            quantity_expr="IS1200Engine.formwork_slab_area(L_slab, B_slab) * n_slabs",
+            notes="Formwork to slab soffit area."
+        ),
+    ],
+)
+
+
+# 7) BRICK WALL (PLINTH / SUPERSTRUCTURE) + INTERNAL PLASTER (ONE SIDE)
 BRICKWALL_PLASTER_PACKAGE = WorkPackage(
     name="Brick wall with plaster (one side)",
     section="Superstructure",
     default_phase="3️⃣ SUPERSTRUCTURE",
     description="Brick masonry wall with 12 mm plaster on one face.",
     components=[
-        # Brickwork volume: L * t * H
         ComponentLine(
             role="brickwork",
-            item_key="Brickwork superstructure FB bricks (4.1.2)",  # superstructure brickwork
+            item_key="Brickwork superstructure FB bricks (4.1.2)",
             quantity_expr="L_wall * t_wall * H_wall",
             notes="Brickwork in superstructure; thickness in metres (e.g., 0.23 for 230mm)."
         ),
-        # Plaster on one side (L * H)
         ComponentLine(
             role="plaster_one_side",
             item_key="12mm cement plaster 1:6 fair face (6.1.1)",
@@ -287,7 +345,7 @@ BRICKWALL_PLASTER_PACKAGE = WorkPackage(
 )
 
 
-# 5) FLOOR TILING – VITRIFIED TILES
+# 8) FLOOR TILING – VITRIFIED TILES
 FLOOR_TILES_PACKAGE = WorkPackage(
     name="Vitrified floor tiles 600x600mm (with 3% wastage)",
     section="Finishing",
@@ -297,7 +355,6 @@ FLOOR_TILES_PACKAGE = WorkPackage(
         ComponentLine(
             role="floor_tiling",
             item_key="Vitrified floor tiles 600x600mm (12.1.1)",
-            # Use IS1200Engine.floor_area_with_wastage: returns dict
             quantity_expr="IS1200Engine.floor_area_with_wastage(L_room, B_room, wastage_factor)['net']",
             notes="Vitrified tiles including 3% wastage; L_room & B_room in m, wastage_factor e.g. 1.03."
         ),
@@ -305,21 +362,19 @@ FLOOR_TILES_PACKAGE = WorkPackage(
 )
 
 
-# 6) WALL PAINTING – INTERNAL EMULSION
+# 9) WALL PAINTING – INTERNAL
 INTERNAL_PAINTING_PACKAGE = WorkPackage(
     name="Internal wall painting (putty + acrylic emulsion)",
     section="Finishing",
     default_phase="4️⃣ FINISHING",
     description="Internal wall system: putty + acrylic emulsion paint, both sides of wall.",
     components=[
-        # Putty (use 10.5.1 Wall care putty)
         ComponentLine(
             role="putty",
             item_key="Wall care putty painting prep (10.5.1)",
             quantity_expr="IS1200Engine.wall_finish_area(L_wall, H_wall, sides)['net']",
             notes="Wall care putty on both sides; sides usually 2 for a partition."
         ),
-        # Acrylic emulsion paint
         ComponentLine(
             role="acrylic_paint",
             item_key="Premium acrylic emulsion painting (10.1.1)",
@@ -334,6 +389,9 @@ WORK_PACKAGES_CIVIL: Dict[str, WorkPackage] = {
     SITE_CLEARANCE_PACKAGE.name: SITE_CLEARANCE_PACKAGE,
     BULK_EARTHWORKS_PACKAGE.name: BULK_EARTHWORKS_PACKAGE,
     ISOLATED_FOOTING_PACKAGE.name: ISOLATED_FOOTING_PACKAGE,
+    RCC_COLUMNS_PACKAGE.name: RCC_COLUMNS_PACKAGE,
+    RCC_BEAMS_PACKAGE.name: RCC_BEAMS_PACKAGE,
+    RCC_SLAB_PACKAGE.name: RCC_SLAB_PACKAGE,
     BRICKWALL_PLASTER_PACKAGE.name: BRICKWALL_PLASTER_PACKAGE,
     FLOOR_TILES_PACKAGE.name: FLOOR_TILES_PACKAGE,
     INTERNAL_PAINTING_PACKAGE.name: INTERNAL_PAINTING_PACKAGE,
@@ -358,32 +416,7 @@ def expand_work_package(
     package_name : str
         Key in WORK_PACKAGES_CIVIL.
     context : dict
-        Dictionary of geometric/other inputs used in quantity_expr:
-        Examples for different packages:
-
-        - Site clearance:
-            {"site_area_sqm": 500.0}
-
-        - Bulk earthworks:
-            {"cut_volume_cum": 300.0, "fill_volume_cum": 200.0}
-
-        - Isolated footing:
-            {
-              "L_exc": 2.4, "B_exc": 2.4, "D_exc": 0.7,
-              "L_blind": 2.2, "B_blind": 2.2, "t_blind": 0.05,
-              "L_foot": 2.0, "B_foot": 2.0, "D_foot": 0.5,
-              "backfill_volume_cum": 3.0
-            }
-
-        - Brick wall + plaster:
-            {"L_wall": 4.0, "H_wall": 3.0, "t_wall": 0.23}
-
-        - Floor tiles:
-            {"L_room": 5.0, "B_room": 4.0, "wastage_factor": 1.03}
-
-        - Painting:
-            {"L_wall": 5.0, "H_wall": 3.0, "sides": 2}
-
+        Contains all variables referenced in quantity_expr.
     phase : str or None
         BOQ phase label. If None, package.default_phase is used.
     cost_index : float
@@ -392,7 +425,6 @@ def expand_work_package(
     Returns
     -------
     list[BOQLine]
-        BOQLine entries with id=0 (caller should assign IDs).
     """
     if package_name not in WORK_PACKAGES_CIVIL:
         raise KeyError(f"Unknown work package: {package_name}")
@@ -403,18 +435,16 @@ def expand_work_package(
     lines: List[BOQLine] = []
 
     for comp in pkg.components:
-        # Check if DSR item exists
         if comp.item_key not in ITEMS:
-            # Item not present; skip silently to avoid breaking estimates
+            # item not present in DSR data; skip
             continue
 
         item: Item = ITEMS[comp.item_key]
 
-        # Evaluate quantity expression
         try:
             qty_val = eval(comp.quantity_expr, {}, env)
         except Exception:
-            # Skip this component if evaluation fails; caller can log separately
+            # skip this component if evaluation fails
             continue
 
         try:
@@ -425,31 +455,50 @@ def expand_work_package(
         if qty <= 0.0:
             continue
 
-        # Simple pricing: location index only (contingency/overheads/profit can be added later)
         rate = item.rate_at_index(cost_index)
         amount = qty * rate
 
-        # Try to infer basic geometry (non-critical; for MB, etc.)
+        # Basic geometry inference for MB: not critical but useful
         length = float(
             context.get(
                 "L_wall",
-                context.get("L_foot", context.get("L_room", context.get("L", 0.0))),
+                context.get(
+                    "L_foot",
+                    context.get(
+                        "L_room",
+                        context.get(
+                            "L_slab",
+                            context.get("L_beam", context.get("L", 0.0)),
+                        ),
+                    ),
+                ),
             )
         )
         breadth = float(
             context.get(
                 "B_wall",
-                context.get("B_foot", context.get("B_room", context.get("B", 0.0))),
+                context.get(
+                    "B_foot",
+                    context.get(
+                        "B_room",
+                        context.get("B_slab", context.get("b_beam", context.get("B", 0.0))),
+                    ),
+                ),
             )
         )
         depth = float(
             context.get(
-                "D_foot", context.get("D_exc", context.get("D", 0.0))
+                "D_foot",
+                context.get(
+                    "D_exc",
+                    context.get("d_beam", context.get("t_slab", context.get("D", 0.0))),
+                ),
             )
         )
         height = float(
             context.get(
-                "H_wall", context.get("H", 0.0)
+                "H_wall",
+                context.get("h_col", context.get("H", 0.0)),
             )
         )
 
@@ -459,7 +508,7 @@ def expand_work_package(
         }
 
         line = BOQLine.from_item(
-            line_id=0,  # caller should assign an actual ID
+            line_id=0,  # caller assigns actual ID
             item=item,
             phase=eff_phase,
             quantity=qty,
