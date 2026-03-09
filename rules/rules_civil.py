@@ -1,3 +1,5 @@
+# rules/rules_civil.py
+
 from __future__ import annotations
 
 """
@@ -22,12 +24,12 @@ Each rule receives this list and returns a list[RuleResult].
 RULES IMPLEMENTED
 -----------------
 1. rule_phase_sequence
-   - Warns if phases are "jumped" (e.g., SUPSTRUCT without SUBSTRUCT/PLINTH).
+   - Warns if phases are "jumped" (e.g., SUPERSTRUCTURE without PLINTH).
    - Warns if FINISHING present but no SUPERSTRUCTURE.
 
 2. rule_finishing_requires_structure
    - Warns if finishing items exist (plaster/tiles/painting/flooring/etc.)
-     but no structural items (concrete/brickwork/stone masonry) at all.
+     but no structural/masonry items (concrete/brickwork/stone).
 
 3. rule_plaster_requires_masonry_or_concrete
    - Warns if plaster items exist without any brickwork/stone/concrete.
@@ -40,7 +42,11 @@ RULES IMPLEMENTED
 
 6. rule_min_concrete_grade_for_rcc
    - Warns if items suggest RCC structural concrete below M20 for beams/slabs/
-     columns (based on description) contrary to IS 456 typical practice.
+     columns (based on description) contrary to IS 456 practice.
+
+7. rule_anti_termite_and_dpc
+   - Warns if substructure/plinth work exists but there is no anti-termite
+     treatment item and/or no DPC item.
 
 Extend / add rules here as needed.
 """
@@ -90,7 +96,6 @@ def _normalise_items(items: Sequence[Any]) -> List[_NormItem]:
                 amount=float(src.amount or 0.0),
             )
         elif isinstance(src, dict):
-            # Legacy dict format from older app
             desc = str(
                 src.get("description")
                 or src.get("item")
@@ -114,7 +119,7 @@ def _normalise_items(items: Sequence[Any]) -> List[_NormItem]:
     return norm
 
 
-# Map for phase sequencing checks
+# Phase ordering for sequence checks
 _PHASE_ORDER = {
     "1️⃣ SUBSTRUCTURE": 1,
     "2️⃣ PLINTH": 2,
@@ -137,7 +142,7 @@ def rule_phase_sequence(items: Sequence[Any]) -> List[RuleResult]:
 
     Flags:
     - WARNING if FINISHING exists but SUPERSTRUCTURE absent.
-    - WARNING if SUPERSTRUCTURE exists but SUBSTRUCTURE/PLINTH entirely absent.
+    - WARNING if SUPERSTRUCTURE exists but SUBSTRUCTURE/PLINTH absent.
     - WARNING if there is a "jump" in phases (e.g. 1 & 3 but no 2).
     """
     norm = _normalise_items(items)
@@ -369,8 +374,6 @@ def rule_min_concrete_grade_for_rcc(items: Sequence[Any]) -> List[RuleResult]:
     This is a heuristic rule:
         - We look for category 'concrete' and description containing 'M15'
           along with 'slab'/'beam'/'column'/'RCC'.
-        - If found, we warn that IS 456 generally requires M20 for RCC in
-          flexure (beams/slabs) and columns.
     """
     norm = _normalise_items(items)
     if not norm:
@@ -382,7 +385,6 @@ def rule_min_concrete_grade_for_rcc(items: Sequence[Any]) -> List[RuleResult]:
         if ni.category != "concrete":
             continue
         desc = ni.description.lower()
-        # detect grade
         if "m15" in desc and any(w in desc for w in ("slab", "beam", "column", "r.c.c", "rcc")):
             results.append(
                 RuleResult(
@@ -403,6 +405,80 @@ def rule_min_concrete_grade_for_rcc(items: Sequence[Any]) -> List[RuleResult]:
 
 
 # =============================================================================
+# Rule 7 – Anti-termite treatment and DPC for foundation/plinth
+# =============================================================================
+
+def rule_anti_termite_and_dpc(items: Sequence[Any]) -> List[RuleResult]:
+    """
+    Check that for a building with foundation/plinth work, we also have:
+    - Anti-termite treatment items (IS 6313 / CPWD DSR 2.xx)
+    - Damp proof course (DPC) items (chapter 7, 'damp proof course' in desc)
+
+    If there is substructure/plinth concrete/masonry but either anti-termite
+    or DPC is missing, raise a WARNING.
+    """
+    norm = _normalise_items(items)
+    if not norm:
+        return []
+
+    # Structural presence in substructure/plinth phases
+    struct_cats = {"earthwork", "concrete", "brickwork", "stone_masonry"}
+    foundation_phases = {"1️⃣ SUBSTRUCTURE", "2️⃣ PLINTH"}
+
+    has_foundation = any(
+        (ni.category in struct_cats) and (ni.phase in foundation_phases)
+        for ni in norm
+    )
+
+    if not has_foundation:
+        return []  # no foundation/plinth → no check
+
+    # Detect anti-termite items by description
+    def _is_antitermite(ni: _NormItem) -> bool:
+        d = ni.description.lower()
+        return any(
+            kw in d
+            for kw in ("anti termite", "anti-termite", "antitermite", "termite treatment")
+        )
+
+    # Detect DPC by description or by code prefix 7.x
+    def _is_dpc(ni: _NormItem) -> bool:
+        d = ni.description.lower()
+        if "damp proof course" in d or "d.p.c" in d or "dpc" in d:
+            return True
+        if ni.code.startswith("7."):
+            return True
+        return False
+
+    has_at = any(_is_antitermite(ni) for ni in norm)
+    has_dpc = any(_is_dpc(ni) for ni in norm)
+
+    results: List[RuleResult] = []
+    if not has_at or not has_dpc:
+        missing = []
+        if not has_at:
+            missing.append("anti-termite treatment")
+        if not has_dpc:
+            missing.append("DPC")
+
+        results.append(
+            RuleResult(
+                level="WARNING",
+                discipline="civil",
+                code="CIV-DEP-005",
+                message=(
+                    "Substructure/plinth work is present but the following items are missing: "
+                    + ", ".join(missing)
+                    + ". As per IS 6313 / CPWD practice, anti-termite treatment and "
+                    "damp-proof course at plinth level should normally be included."
+                ),
+            )
+        )
+
+    return results
+
+
+# =============================================================================
 # Aggregate: list of all civil rules
 # =============================================================================
 
@@ -413,6 +489,7 @@ ALL_CIVIL_RULES: List[RuleFn] = [
     rule_paint_requires_plaster_or_putty,
     rule_earthwork_requires_backfill,
     rule_min_concrete_grade_for_rcc,
+    rule_anti_termite_and_dpc,
 ]
 
 
