@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
-import numpy as np
 import pandas as pd
 import streamlit as st
 
-from core.models import BOQLine, Item, Project
+from core.models import BOQLine, Item
 from core.pricing import monte_carlo_amount
 from engines.is1200_civil import IS1200Engine
 from knowledge.dsr_master import (
@@ -47,9 +45,8 @@ def _boqline_to_dict(line: BOQLine) -> Dict[str, Any]:
     and for DataFrame / rules.
     """
     d = line.to_dict()
-    # For backward compatibility with any legacy code:
+    # legacy fields for compatibility
     d["dsr_code"] = d.get("code", "")
-    # Ensure 'item' points to description for old references
     d["item"] = d.get("description", "")
     return d
 
@@ -87,8 +84,8 @@ if "project_info" not in st.session_state:
 st.markdown(
     """
 <div style='background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); padding:1.2rem; border-radius:0.7rem; color:white; text-align:center'>
-  <h2 style='margin:0;'>🏗️ CPWD DSR 2023 – Civil + MEP Estimator (IS 1200, Packages, Rules)</h2>
-  <p style='margin:0.2rem 0 0;'>JE-style estimate generator with auto-expansion, IS-1200 measurement and multi-discipline rule checks.</p>
+  <h2 style='margin:0;'>🏗️ CPWD DSR 2023 – Civil + MEP Estimator</h2>
+  <p style='margin:0.2rem 0 0;'>JE-style estimate generator with IS 1200 measurement, RCC packages (concrete + steel + formwork), and multi-discipline audit rules.</p>
 </div>
 """,
     unsafe_allow_html=True,
@@ -111,28 +108,32 @@ with st.sidebar:
     )
 
     st.subheader("📍 Location & Rate Source")
-    location = st.selectbox("Location", list(LOCATION_INDICES.keys()),
-                            index=list(LOCATION_INDICES.keys()).index(
-                                st.session_state.project_info.get("location", "Delhi")
-                            )
-                            )
+    location = st.selectbox(
+        "Location",
+        list(LOCATION_INDICES.keys()),
+        index=list(LOCATION_INDICES.keys()).index(
+            st.session_state.project_info.get("location", "Delhi")
+        ),
+    )
     st.session_state.project_info["location"] = location
     cost_index = LOCATION_INDICES[location]
-    st.info(f"Cost Index for **{location}**: **{cost_index}%** (Base = 100)")
+    st.info(f"Cost Index for **{location}**: **{cost_index:.1f}%** (Base = 100)")
 
     rate_source_names = list(RATE_SOURCES.keys())
     default_source = st.session_state.project_info.get("rate_source", rate_source_names[0])
-    rate_source = st.selectbox("Rate Source", rate_source_names,
-                               index=rate_source_names.index(default_source)
-                               if default_source in rate_source_names
-                               else 0)
+    rate_source = st.selectbox(
+        "Rate Source",
+        rate_source_names,
+        index=rate_source_names.index(default_source)
+        if default_source in rate_source_names
+        else 0,
+    )
     st.session_state.project_info["rate_source"] = rate_source
     current_dsr = RATE_SOURCES[rate_source]
 
-    st.subheader("⚙️ Pricing Adjustments (for display only)")
+    st.subheader("⚙️ Pricing Adjustments (for info)")
     contingency_pct = st.slider("Contingency (%)", 0.0, 10.0, 5.0, 0.5)
     escalation_annual = st.slider("Escalation p.a. (%)", 0.0, 10.0, 5.0, 0.5)
-    # We use base rates + index in calculations; contingency/escalation only for info.
 
 # =============================================================================
 # Dashboard metrics
@@ -150,7 +151,7 @@ col0, col1, col2, col3, col4 = st.columns(5)
 col0.metric("💰 Base Cost (Current BOQ)", format_rupees(total_cost))
 col1.metric("📋 BOQ Lines", str(total_items))
 col2.metric("📍 Cost Index", f"{cost_index:.1f}%")
-col3.metric("📊 Sanction Estimate (~7.5% extra)", format_rupees(total_cost * 1.075))
+col3.metric("📊 Sanction (~7.5% extra)", format_rupees(total_cost * 1.075))
 col4.metric("🎯 P90 Risk Budget", format_rupees(mc["p90"]))
 
 # =============================================================================
@@ -162,7 +163,7 @@ tab1, tab2, tab3, tab4 = st.tabs(
 )
 
 # =============================================================================
-# TAB 1 – SOQ / BOQ – Single Items + Packages
+# TAB 1 – SOQ / BOQ – Single Items + Civil Packages + MEP Packages
 # =============================================================================
 
 with tab1:
@@ -186,21 +187,21 @@ with tab1:
         item_key = c2.selectbox(
             "DSR Item",
             available_items,
-        ) if available_items else (None)
+        ) if available_items else None
 
         if item_key and item_key in CPWD_BASE_DSR_2023:
-            rec = CPWD_BASE_DSR_2023[item_key]
             item: Item = ITEMS[item_key]
-            st.markdown(
-                f"**Code:** `{item.code}` &nbsp;&nbsp; **Unit:** `{item.unit}` &nbsp;&nbsp; "
-                f"**Category:** `{item.category}` &nbsp;&nbsp; **Rule:** `{item.measurement_rule}`"
-            )
-
             measure_type = item.measure_type
             rule = item.measurement_rule or "volume"
 
+            st.markdown(
+                f"**Code:** `{item.code}` &nbsp;&nbsp; **Unit:** `{item.unit}` &nbsp;&nbsp; "
+                f"**Category:** `{item.category}` &nbsp;&nbsp; **Rule:** `{rule}`"
+            )
+
             quantity = 0.0
             qto_info = ""
+            length = breadth = depth = height = 0.0
 
             # Geometry inputs based on measurement_rule
             if rule == "trench_excavation":
@@ -212,7 +213,7 @@ with tab1:
                 res = IS1200Engine.trench_excavation(L, B, D, side_slope_h_over_v=slope)
                 quantity = res["net"]
                 qto_info = f"L×B×D with slope = {res['gross']:.3f} – {res['deductions']:.3f} = {res['net']:.3f} m³"
-                length, breadth, depth, height = L, B, D, 0.0
+                length, breadth, depth = L, B, D
 
             elif rule == "brickwork_wall":
                 c1, c2, c3, c4 = st.columns(4)
@@ -226,7 +227,7 @@ with tab1:
                 res = IS1200Engine.brickwork_wall(L, t, H, openings)
                 quantity = res["net"]
                 qto_info = f"L×t×H = {res['gross']:.3f} – {res['deductions']:.3f} = {res['net']:.3f} m³"
-                length, breadth, depth, height = L, t, 0.0, H
+                length, breadth, height = L, t, H
 
             elif rule == "wall_finish_area":
                 c1, c2, c3, c4 = st.columns(4)
@@ -240,7 +241,7 @@ with tab1:
                 res = IS1200Engine.wall_finish_area(L, H, sides=sides, openings=openings)
                 quantity = res["net"]
                 qto_info = f"Gross {res['gross']:.3f} – Deduction {res['deductions']:.3f} = {res['net']:.3f} sqm"
-                length, breadth, depth, height = L, H, 0.0, H
+                length, height = L, H
 
             elif rule == "floor_area":
                 c1, c2, c3 = st.columns(3)
@@ -253,9 +254,10 @@ with tab1:
                 res = IS1200Engine.floor_area(L, B, cut)
                 quantity = res["net"]
                 qto_info = f"L×B = {res['gross']:.3f} – Cutouts {res['deductions']:.3f} = {res['net']:.3f} sqm"
-                length, breadth, depth, height = L, B, 0.0, 0.0
+                length, breadth = L, B
 
-            else:  # default volume / simple area / length
+            else:
+                # default handling by measure_type
                 if measure_type == "volume":
                     c1, c2, c3, c4 = st.columns(4)
                     L = c1.number_input("Length L (m)", 0.1, 100.0, 2.0, 0.1)
@@ -265,24 +267,23 @@ with tab1:
                     res = IS1200Engine.volume(L, B, D, deductions=ded)
                     quantity = res["net"]
                     qto_info = f"L×B×D = {res['gross']:.3f} – {res['deductions']:.3f} = {res['net']:.3f} m³"
-                    length, breadth, depth, height = L, B, D, 0.0
+                    length, breadth, depth = L, B, D
                 elif measure_type == "area":
                     c1, c2 = st.columns(2)
                     L = c1.number_input("Length L (m)", 0.1, 100.0, 4.0, 0.1)
-                    B = c2.number_input("Breadth/Width B (m)", 0.1, 100.0, 3.0, 0.1)
+                    B = c2.number_input("Breadth B (m)", 0.1, 100.0, 3.0, 0.1)
                     gross = L * B
                     quantity = gross
                     qto_info = f"L×B = {gross:.3f} sqm"
-                    length, breadth, depth, height = L, B, 0.0, 0.0
+                    length, breadth = L, B
                 elif measure_type == "length":
                     L = st.number_input("Length (m)", 0.1, 1000.0, 10.0, 0.1)
                     quantity = L
                     qto_info = f"Length = {L:.3f} m"
-                    length, breadth, depth, height = L, 0.0, 0.0, 0.0
+                    length = L
                 else:  # weight/each
                     quantity = st.number_input("Quantity", 0.0, 1e6, 1.0, 1.0)
                     qto_info = f"Quantity = {quantity:.3f} {item.unit}"
-                    length, breadth, depth, height = 0.0, 0.0, 0.0, 0.0
 
             rate = item.rate_at_index(cost_index)
             amount = quantity * rate
@@ -327,13 +328,17 @@ with tab1:
         st.caption(pkg.description)
 
         ctx: Dict[str, Any] = {}
-        # Minimal UI for the known packages
+
         if "Site clearance" in pkg_name:
-            ctx["site_area_sqm"] = st.number_input("Site clearance area (sqm)", 10.0, 1e6, 500.0, 10.0)
+            ctx["site_area_sqm"] = st.number_input(
+                "Site clearance area (sqm)", 10.0, 1e6, 500.0, 10.0
+            )
+
         elif "Bulk earthworks" in pkg_name:
             c1, c2 = st.columns(2)
             ctx["cut_volume_cum"] = c1.number_input("Cut volume (cum)", 0.0, 1e6, 100.0, 1.0)
             ctx["fill_volume_cum"] = c2.number_input("Fill volume (cum)", 0.0, 1e6, 80.0, 1.0)
+
         elif "Isolated footing" in pkg_name:
             c1, c2, c3 = st.columns(3)
             ctx["L_foot"] = c1.number_input("Footing L (m)", 0.1, 10.0, 2.0, 0.1)
@@ -350,7 +355,45 @@ with tab1:
             ctx["B_exc"] = c8.number_input("Excavation B (m)", 0.1, 10.0, ctx["B_blind"] + 0.3, 0.1)
             ctx["D_exc"] = c9.number_input("Excavation D (m)", 0.1, 3.0, ctx["D_foot"] + 0.2, 0.05)
 
-            ctx["backfill_volume_cum"] = st.number_input("Backfill volume (cum)", 0.0, 1e6, 0.0, 0.1)
+            ctx["backfill_volume_cum"] = st.number_input(
+                "Backfill volume (cum)", 0.0, 1e6, 0.0, 0.1
+            )
+
+        elif "RCC columns" in pkg_name:
+            c1, c2, c3 = st.columns(3)
+            ctx["n_cols"] = c1.number_input("Number of columns", 1, 1000, 4, 1)
+            ctx["b_col"] = c2.number_input("Column width b (m)", 0.1, 1.0, 0.23, 0.01)
+            ctx["d_col"] = c3.number_input("Column depth d (m)", 0.1, 1.0, 0.23, 0.01)
+
+            c4, c5 = st.columns(2)
+            ctx["h_col"] = c4.number_input("Column height (floor-to-floor) (m)", 1.0, 6.0, 3.0, 0.1)
+            ctx["steel_kg_per_cum_col"] = c5.number_input(
+                "Steel kg/m³ (columns)", 40.0, 300.0, 160.0, 5.0
+            )
+
+        elif "RCC beams" in pkg_name:
+            c1, c2, c3 = st.columns(3)
+            ctx["n_beams"] = c1.number_input("Number of beams", 1, 1000, 6, 1)
+            ctx["L_beam"] = c2.number_input("Beam span L (m)", 0.5, 20.0, 4.0, 0.1)
+            ctx["b_beam"] = c3.number_input("Beam width b (m)", 0.1, 1.0, 0.23, 0.01)
+
+            c4, c5 = st.columns(2)
+            ctx["d_beam"] = c4.number_input("Beam depth D (m)", 0.1, 2.0, 0.45, 0.01)
+            ctx["steel_kg_per_cum_beam"] = c5.number_input(
+                "Steel kg/m³ (beams)", 40.0, 300.0, 120.0, 5.0
+            )
+
+        elif "RCC slab" in pkg_name:
+            c1, c2, c3 = st.columns(3)
+            ctx["n_slabs"] = c1.number_input("Number of identical slabs/bays", 1, 100, 1, 1)
+            ctx["L_slab"] = c2.number_input("Slab span L (m)", 1.0, 20.0, 4.0, 0.1)
+            ctx["B_slab"] = c3.number_input("Slab breadth B (m)", 1.0, 20.0, 3.0, 0.1)
+
+            c4, c5 = st.columns(2)
+            ctx["t_slab"] = c4.number_input("Slab thickness t (m)", 0.08, 0.25, 0.15, 0.01)
+            ctx["steel_kg_per_cum_slab"] = c5.number_input(
+                "Steel kg/m³ (slabs)", 40.0, 300.0, 100.0, 5.0
+            )
 
         elif "Brick wall with plaster" in pkg_name:
             c1, c2, c3 = st.columns(3)
@@ -362,7 +405,9 @@ with tab1:
             c1, c2, c3 = st.columns(3)
             ctx["L_room"] = c1.number_input("Room length L (m)", 0.1, 100.0, 4.0, 0.1)
             ctx["B_room"] = c2.number_input("Room breadth B (m)", 0.1, 100.0, 3.0, 0.1)
-            ctx["wastage_factor"] = c3.number_input("Wastage factor", 1.00, 1.20, 1.03, 0.01)
+            ctx["wastage_factor"] = c3.number_input(
+                "Wastage factor", 1.00, 1.20, 1.03, 0.01
+            )
 
         elif "Internal wall painting" in pkg_name:
             c1, c2, c3 = st.columns(3)
@@ -389,13 +434,17 @@ with tab1:
         st.caption(pkg.description)
 
         ctx: Dict[str, Any] = {}
-        # Electrical lighting package
+
         if "lighting wiring" in pkg_name.lower():
             c1, c2 = st.columns(2)
             ctx["lighting_points"] = c1.number_input("Lighting points", 1, 200, 8, 1)
-            ctx["avg_run_ltg"] = c2.number_input("Avg horizontal run per point (m)", 1.0, 50.0, 8.0, 0.5)
+            ctx["avg_run_ltg"] = c2.number_input(
+                "Avg horizontal run per point (m)", 1.0, 50.0, 8.0, 0.5
+            )
             c3, c4 = st.columns(2)
-            ctx["vertical_drop"] = c3.number_input("Vertical drop (m)", 1.0, 6.0, 3.0, 0.1)
+            ctx["vertical_drop"] = c3.number_input(
+                "Vertical drop (m)", 1.0, 6.0, 3.0, 0.1
+            )
             ctx["lighting_points_per_circuit"] = int(
                 c4.number_input("Points per circuit", 2, 15, 8, 1)
             )
@@ -403,25 +452,32 @@ with tab1:
                 st.number_input("Points per 6M switchboard", 1, 20, 4, 1)
             )
 
-        # Plumbing toilet fixtures
-        elif "Toilet block plumbing" in pkg_name:
+        elif "toilet block plumbing" in pkg_name.lower():
             c1, c2, c3 = st.columns(3)
             ctx["toilet_blocks"] = c1.number_input("No. of toilet blocks", 1, 50, 2, 1)
             ctx["wc_per_block"] = c2.number_input("WCs per block", 1, 20, 2, 1)
             ctx["basins_per_block"] = c3.number_input("Basins per block", 1, 20, 2, 1)
             c4, c5, c6 = st.columns(3)
             ctx["urinals_per_block"] = c4.number_input("Urinals per block", 0, 20, 1, 1)
-            ctx["floor_traps_per_block"] = c5.number_input("Floor traps per block", 0, 20, 2, 1)
-            ctx["nahani_traps_per_block"] = c6.number_input("Nahani traps per block", 0, 20, 0, 1)
+            ctx["floor_traps_per_block"] = c5.number_input(
+                "Floor traps per block", 0, 20, 2, 1
+            )
+            ctx["nahani_traps_per_block"] = c6.number_input(
+                "Nahani traps per block", 0, 20, 0, 1
+            )
 
-        # HVAC ducting
         elif "ahu zone ducting" in pkg_name.lower():
             c1, c2, c3 = st.columns(3)
-            ctx["supply_cmh"] = c1.number_input("Supply airflow (CMH)", 100.0, 200000.0, 8000.0, 100.0)
-            ctx["main_duct_length_m"] = c2.number_input("Main duct length (m)", 5.0, 500.0, 20.0, 1.0)
-            ctx["branch_duct_length_m"] = c3.number_input("Branch duct length (m)", 5.0, 1000.0, 40.0, 1.0)
+            ctx["supply_cmh"] = c1.number_input(
+                "Supply airflow (CMH)", 100.0, 200000.0, 8000.0, 100.0
+            )
+            ctx["main_duct_length_m"] = c2.number_input(
+                "Main duct length (m)", 5.0, 500.0, 20.0, 1.0
+            )
+            ctx["branch_duct_length_m"] = c3.number_input(
+                "Branch duct length (m)", 5.0, 1000.0, 40.0, 1.0
+            )
 
-        # Fire alarm floor
         elif "fire alarm devices" in pkg_name.lower():
             c1, c2, c3, c4 = st.columns(4)
             ctx["smoke_detectors"] = c1.number_input("Smoke detectors", 0, 500, 20, 1)
@@ -438,7 +494,7 @@ with tab1:
             st.balloons()
 
     # -------------------------------------------------------------------------
-    # Display current SOQ/BOQ
+    # Show current BOQ
     # -------------------------------------------------------------------------
     if st.session_state.qto_items:
         st.markdown("### Current SOQ / BOQ")
@@ -462,7 +518,7 @@ with tab1:
         col_btn1, col_btn2 = st.columns(2)
         if col_btn1.button("🧹 Clear SOQ", type="secondary"):
             st.session_state.qto_items = []
-            st.experimental_rerun()
+            st.rerun()
         if col_btn2.button("💾 Download BOQ (CSV)"):
             csv = df.to_csv(index=False).encode("utf-8")
             st.download_button(
@@ -482,11 +538,10 @@ with tab2:
     if not st.session_state.qto_items:
         st.info("Add items in SOQ / BOQ tab to see abstract and audit checks.")
     else:
-        # Abstract by phase
         df = pd.DataFrame(st.session_state.qto_items)
         phase_totals = df.groupby("phase")["amount"].sum().reset_index()
         phase_totals["Amount (₹)"] = phase_totals["amount"].apply(format_rupees)
-        st.markdown("### Phase-wise Abstract (Form 5A Style)")
+        st.markdown("### Phase-wise Abstract")
         st.dataframe(
             phase_totals[["phase", "Amount (₹)"]].rename(columns={"phase": "Phase"}),
             use_container_width=True,
@@ -494,7 +549,6 @@ with tab2:
 
         st.markdown("**Grand Total:** " + format_rupees(total_cost))
 
-        # Audit rules
         st.markdown("### 🛡️ Technical & Audit Rules (Civil + MEP)")
         results = run_all_rules(st.session_state.qto_items)
         if not results:
@@ -772,4 +826,6 @@ with tab4:
 """
             )
 
-st.success("✅ Estimator ready – Civil + MEP packages, IS 1200 measurement, and multi-discipline rule checks are active.")
+st.success(
+    "✅ Estimator ready – Civil + RCC packages (concrete+steel+formwork), MEP packages, IS-1200 measurement and multi-discipline rule checks are active."
+)
