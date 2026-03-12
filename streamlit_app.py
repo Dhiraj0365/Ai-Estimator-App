@@ -84,7 +84,7 @@ if "project_info" not in st.session_state:
 st.markdown(
     """
 <div style='background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); padding:1.2rem; border-radius:0.7rem; color:white; text-align:center'>
-  <h2 style='margin:0;'>🏗️ CPWD DSR 2023 – Civil + MEP Estimator</h2>
+  <h2 style='margin:0;'>🏗️ AI Construction Estimator – India – Civil + MEP Estimator</h2>
   <p style='margin:0.2rem 0 0;'>JE-style estimate generator with IS 1200 measurement, RCC packages (concrete + steel + formwork), and multi-discipline audit rules.</p>
 </div>
 """,
