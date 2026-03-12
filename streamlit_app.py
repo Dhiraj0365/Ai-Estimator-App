@@ -60,7 +60,7 @@ def _next_id() -> int:
 # =============================================================================
 
 st.set_page_config(
-    page_title="CPWD DSR 2023 – Civil + MEP Estimator",
+    page_title="AI Construction Estimator – India – Civil + MEP Estimator",
     page_icon="🏗️",
     layout="wide",
 )
