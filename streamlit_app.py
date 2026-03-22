@@ -71,7 +71,7 @@ def _next_id() -> int:
 # =============================================================================
 
 st.set_page_config(
-    page_title="CPWD / PWD AI Construction Estimator & Tender Engine",
+    page_title="AI Construction Estimator & Tender Engine",
     page_icon="🏗️",
     layout="wide",
 )
@@ -125,7 +125,7 @@ if "work_order" not in st.session_state:
 st.markdown(
     """
 <div style='background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); padding:1.2rem; border-radius:0.7rem; color:white; text-align:center'>
-  <h2 style='margin:0;'>🏗️ CPWD / PWD AI Estimator & Tender Engine</h2>
+  <h2 style='margin:0;'>🏗️ AI Estimator & Tender Engine</h2>
   <p style='margin:0.2rem 0 0;'>DSR-based Detailed Estimates, RCC packages (concrete + steel + formwork), audit rules, and end-to-end tender workflow (AA/ES → TS → NIT → L1 → LOA → PG → Work Order).</p>
 </div>
 """,
