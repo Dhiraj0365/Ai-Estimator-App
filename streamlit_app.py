@@ -56,7 +56,7 @@ def _boqline_to_dict(line: BOQLine) -> Dict[str, Any]:
     and for DataFrame / rules.
     """
     d = line.to_dict()
-    # legacy-style fields for compatibility with earlier code
+    # legacy-style fields for compatibility
     d["dsr_code"] = d.get("code", "")
     d["item"] = d.get("description", "")
     return d
@@ -71,7 +71,7 @@ def _next_id() -> int:
 # =============================================================================
 
 st.set_page_config(
-    page_title="AI Construction Estimator & Tender Engine",
+    page_title="CPWD / PWD AI Construction Estimator & Tender Engine",
     page_icon="🏗️",
     layout="wide",
 )
@@ -118,6 +118,10 @@ if "pg" not in st.session_state:
 if "work_order" not in st.session_state:
     st.session_state.work_order = None  # WorkOrder
 
+# Civil package unlock state
+if "civil_unlocked" not in st.session_state:
+    st.session_state.civil_unlocked = False
+
 # =============================================================================
 # Header
 # =============================================================================
@@ -125,7 +129,7 @@ if "work_order" not in st.session_state:
 st.markdown(
     """
 <div style='background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); padding:1.2rem; border-radius:0.7rem; color:white; text-align:center'>
-  <h2 style='margin:0;'>🏗️ AI Estimator & Tender Engine</h2>
+  <h2 style='margin:0;'>🏗️ CPWD / PWD AI Estimator & Tender Engine</h2>
   <p style='margin:0.2rem 0 0;'>DSR-based Detailed Estimates, RCC packages (concrete + steel + formwork), audit rules, and end-to-end tender workflow (AA/ES → TS → NIT → L1 → LOA → PG → Work Order).</p>
 </div>
 """,
@@ -355,9 +359,28 @@ with tab1:
                 st.balloons()
 
     # -------------------------------------------------------------------------
-    # 1B. Civil Work Package
+    # 1B. Civil Work Package (protected by password 03656236)
     # -------------------------------------------------------------------------
     elif mode == "Civil Work Package":
+        # First, check if civil packages are unlocked
+        if not st.session_state.civil_unlocked:
+            with st.expander("🔐 Civil Packages Locked – Enter Password to Unlock", expanded=True):
+                civil_pw = st.text_input(
+                    "Enter Civil Package Password",
+                    type="password",
+                    key="civil_pkg_pw",
+                )
+                if st.button("🔓 Unlock Civil Packages", key="unlock_civil_pkg_btn"):
+                    if civil_pw == "03656236":
+                        st.session_state.civil_unlocked = True
+                        st.success("✅ Civil packages unlocked for this session.")
+                    else:
+                        st.error("❌ Invalid password. Please enter correct key.")
+            # Stop here if not unlocked yet
+            if not st.session_state.civil_unlocked:
+                st.stop()
+
+        # Once unlocked, proceed as normal
         pkg_name = st.selectbox("Select Civil Package", list(WORK_PACKAGES_CIVIL.keys()))
         pkg = WORK_PACKAGES_CIVIL[pkg_name]
 
@@ -843,25 +866,24 @@ with tab4:
                     format_rupees(total_cost * 0.03),
                 ],
             }
-            df6 = pd.DataFrame(wo_data)
-            st.dataframe(df6, use_container_width=True)
+        st.dataframe(wo_data if isinstance(wo_data, pd.DataFrame) else pd.DataFrame(wo_data), use_container_width=True)
 
-            st.download_button(
-                "📥 Download PWD Form 6 (CSV)",
-                df6.to_csv(index=False).encode("utf-8"),
-                file_name=f"PWD_Form6_WorkOrder_{today.strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-            )
+        st.download_button(
+            "📥 Download PWD Form 6 (CSV)",
+            pd.DataFrame(wo_data).to_csv(index=False).encode("utf-8"),
+            file_name=f"PWD_Form6_WorkOrder_{today.strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
 
-            st.markdown(
-                f"""
+        st.markdown(
+            f"""
 **WORK ORDER No:** WO/{location[:3].upper()}/{today.strftime('%Y')}/{today.strftime('%m%d')}/001  
 
 **To:** M/s [CONTRACTOR NAME]  
 
 **Subject:** Award of Contract – {name} for {client}
 """
-            )
+        )
 
 # =============================================================================
 # TAB 5 – Tender Engine (AA/ES → TS → NIT → Bids → LOA → PG → Work Order)
@@ -1310,5 +1332,5 @@ Time of Completion  : {loa.completion_time_days} days
                 )
 
 st.success(
-    "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), MEP packages, IS-1200 measurement, multi-discipline rule checks, and CPWD/PWD tender flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active."
+    "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), MEP packages, IS-1200 measurement, multi-discipline rule checks, and CPWD/PWD tender flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\nCivil Work Packages are password-protected with key 03656236."
 )
