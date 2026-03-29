@@ -122,6 +122,10 @@ if "work_order" not in st.session_state:
 if "civil_unlocked" not in st.session_state:
     st.session_state.civil_unlocked = False
 
+# Formats section unlock state
+if "formats_unlocked" not in st.session_state:
+    st.session_state.formats_unlocked = False
+
 # =============================================================================
 # Header
 # =============================================================================
@@ -363,7 +367,7 @@ with tab1:
     # -------------------------------------------------------------------------
     elif mode == "Civil Work Package":
         # First, check if civil packages are unlocked
-        if not st.session_state.civil_unlocked:
+        if not st.session_state.get("civil_unlocked", False):
             with st.expander("🔐 Civil Packages Locked – Enter Password to Unlock", expanded=True):
                 civil_pw = st.text_input(
                     "Enter Civil Package Password",
@@ -377,7 +381,7 @@ with tab1:
                     else:
                         st.error("❌ Invalid password. Please enter correct key.")
             # Stop here if not unlocked yet
-            if not st.session_state.civil_unlocked:
+            if not st.session_state.get("civil_unlocked", False):
                 st.stop()
 
         # Once unlocked, proceed as normal
@@ -662,8 +666,8 @@ with tab3:
 with tab4:
     st.subheader("📄 CPWD / PWD Formats")
 
-    # First, check if formats are unlocked
-    if not st.session_state.formats_unlocked:
+    # Password protection same as civil work package
+    if not st.session_state.get("formats_unlocked", False):
         with st.expander("🔐 Formats Locked – Enter Password to Unlock", expanded=True):
             formats_pw = st.text_input(
                 "Enter Formats Password",
@@ -676,7 +680,8 @@ with tab4:
                     st.success("✅ Formats section unlocked for this session.")
                 else:
                     st.error("❌ Invalid password. Please enter correct key.")
-        if not st.session_state.formats_unlocked:
+
+        if not st.session_state.get("formats_unlocked", False):
             st.stop()
 
     if not st.session_state.qto_items:
@@ -692,19 +697,20 @@ with tab4:
                 "5️⃣ PWD Form 6 – Work Order",
             ],
         )
+
         df = pd.DataFrame(st.session_state.qto_items)
         today = datetime.now()
 
+        # ---------------------------------------------------------------------
         # 1) FORM 5A – ABSTRACT OF COST
+        # ---------------------------------------------------------------------
         if "Form 5A" in format_type:
             st.markdown("### 📋 CPWD Form 5A – Abstract of Cost")
 
             phase_totals = df.groupby("phase")["amount"].sum().reset_index()
             phase_totals["No.Items"] = df.groupby("phase")["id"].count().values
             phase_totals["Amount (₹)"] = phase_totals["amount"].apply(format_rupees)
-            phase_totals.rename(
-                columns={"phase": "Description"}, inplace=True
-            )
+            phase_totals.rename(columns={"phase": "Description"}, inplace=True)
 
             total_row = pd.DataFrame(
                 [
@@ -731,7 +737,9 @@ with tab4:
                 mime="text/csv",
             )
 
+        # ---------------------------------------------------------------------
         # 2) FORM 7 – SCHEDULE OF QUANTITIES
+        # ---------------------------------------------------------------------
         elif "Form 7" in format_type:
             st.markdown("### 📋 CPWD Form 7 – Schedule of Quantities")
 
@@ -739,7 +747,9 @@ with tab4:
             soq["Rate (₹)"] = soq["rate"].map(lambda r: f"{r:,.2f}")
             soq["Amount (₹)"] = soq["amount"].map(format_rupees)
 
-            out = soq[["id", "code", "description", "quantity", "unit", "Rate (₹)", "Amount (₹)"]].rename(
+            out = soq[
+                ["id", "code", "description", "quantity", "unit", "Rate (₹)", "Amount (₹)"]
+            ].rename(
                 columns={
                     "id": "Item No",
                     "code": "DSR Code",
@@ -773,7 +783,9 @@ with tab4:
                 mime="text/csv",
             )
 
+        # ---------------------------------------------------------------------
         # 3) FORM 8 – MEASUREMENT BOOK
+        # ---------------------------------------------------------------------
         elif "Form 8" in format_type:
             st.markdown("### 📏 CPWD Form 8 – Measurement Book")
 
@@ -802,7 +814,9 @@ with tab4:
                 mime="text/csv",
             )
 
+        # ---------------------------------------------------------------------
         # 4) FORM 31 – RUNNING ACCOUNT BILL
+        # ---------------------------------------------------------------------
         elif "Form 31" in format_type:
             st.markdown("### 💰 CPWD Form 31 – Running Account Bill (Simple)")
 
@@ -849,7 +863,9 @@ with tab4:
             c1.metric("Gross Value", format_rupees(gross))
             c2.metric("Net Payable", format_rupees(net))
 
-        # 5) PWD Form 6 – Work Order
+        # ---------------------------------------------------------------------
+        # 5) PWD FORM 6 – WORK ORDER
+        # ---------------------------------------------------------------------
         else:
             st.markdown("### 📜 PWD Form 6 – Work Order (Summary)")
 
@@ -882,24 +898,26 @@ with tab4:
                     format_rupees(total_cost * 0.03),
                 ],
             }
-        st.dataframe(wo_data if isinstance(wo_data, pd.DataFrame) else pd.DataFrame(wo_data), use_container_width=True)
 
-        st.download_button(
-            "📥 Download PWD Form 6 (CSV)",
-            pd.DataFrame(wo_data).to_csv(index=False).encode("utf-8"),
-            file_name=f"PWD_Form6_WorkOrder_{today.strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-        )
+            df_wo = pd.DataFrame(wo_data)
+            st.dataframe(df_wo, use_container_width=True)
 
-        st.markdown(
-            f"""
+            st.download_button(
+                "📥 Download PWD Form 6 (CSV)",
+                df_wo.to_csv(index=False).encode("utf-8"),
+                file_name=f"PWD_Form6_WorkOrder_{today.strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+            )
+
+            st.markdown(
+                f"""
 **WORK ORDER No:** WO/{location[:3].upper()}/{today.strftime('%Y')}/{today.strftime('%m%d')}/001  
 
 **To:** M/s [CONTRACTOR NAME]  
 
 **Subject:** Award of Contract – {name} for {client}
 """
-        )
+            )
 
 # =============================================================================
 # TAB 5 – Tender Engine (AA/ES → TS → NIT → Bids → LOA → PG → Work Order)
@@ -1227,7 +1245,7 @@ Eligibility : {nit.eligibility_criteria}
         if not st.session_state.bids:
             st.warning("No evaluated bids from Stage 5.")
             st.stop()
-        # Find L1
+
         l1 = min(
             (b for b in st.session_state.bids if b["technical_qualified"]),
             key=lambda x: x["quoted_amount"],
@@ -1348,5 +1366,5 @@ Time of Completion  : {loa.completion_time_days} days
                 )
 
 st.success(
-    "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), MEP packages, IS-1200 measurement, multi-discipline rule checks, and CPWD/PWD tender flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\nCivil Work Packages are password-protected with key 03656236."
+    "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), MEP packages, IS-1200 measurement, multi-discipline rule checks, and CPWD/PWD tender flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\nCivil Work Packages and CPWD/PWD Formats are password-protected with key 03656236."
 )
