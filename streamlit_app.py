@@ -662,6 +662,23 @@ with tab3:
 with tab4:
     st.subheader("📄 CPWD / PWD Formats")
 
+    # First, check if formats are unlocked
+    if not st.session_state.formats_unlocked:
+        with st.expander("🔐 Formats Locked – Enter Password to Unlock", expanded=True):
+            formats_pw = st.text_input(
+                "Enter Formats Password",
+                type="password",
+                key="formats_section_pw",
+            )
+            if st.button("🔓 Unlock Formats", key="unlock_formats_btn"):
+                if formats_pw == "03656236":
+                    st.session_state.formats_unlocked = True
+                    st.success("✅ Formats section unlocked for this session.")
+                else:
+                    st.error("❌ Invalid password. Please enter correct key.")
+        if not st.session_state.formats_unlocked:
+            st.stop()
+
     if not st.session_state.qto_items:
         st.info("Complete SOQ / BOQ first to generate formats.")
     else:
@@ -675,7 +692,6 @@ with tab4:
                 "5️⃣ PWD Form 6 – Work Order",
             ],
         )
-
         df = pd.DataFrame(st.session_state.qto_items)
         today = datetime.now()
 
