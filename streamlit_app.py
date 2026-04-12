@@ -46,17 +46,13 @@ VALID_CODES = {
 QR_IMAGE_PATH = "assets/paytm_upi_qr.png"
 
 
-def show_payment_qr() -> None:
-    """
-    Show your static Paytm UPI QR code.
-    User scans and pays to 9871495899@ptyes.
-    You verify payment manually and send activation code.
-    """
+def show_payment_qr(prefix: str = "") -> None:
     st.markdown("**Option 2 – Purchase Premium via UPI**")
-    st.write(
-        "Scan this UPI QR with any app (Paytm, GPay, PhonePe, etc.) to pay for "
-        "premium access. After you complete the payment and we verify it, "
-        "you will receive an activation code."
+    st.write("Scan this QR with Paytm / GPay / PhonePe to pay via UPI.")
+    st.image(QR_IMAGE_PATH, caption="Scan to pay via UPI", use_column_width=False)
+    st.info(
+        "After you pay, we will verify the payment and send you an activation "
+        "code. Enter that code here to unlock premium."
     )
     try:
         st.image(QR_IMAGE_PATH, caption="Scan to pay via UPI", use_column_width=False)
