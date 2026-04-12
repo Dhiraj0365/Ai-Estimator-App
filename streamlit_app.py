@@ -31,6 +31,64 @@ from core.tender_models import (
     WorkOrder,
 )
 
+# =============================================================================
+# Premium / UPI configuration
+# =============================================================================
+
+# You give these codes only to users who have paid via UPI
+VALID_CODES = {
+    "PREM499",
+    "PREM999",
+    # add/change codes as you like
+}
+
+# Path to your Paytm UPI QR image (screenshot you shared)
+QR_IMAGE_PATH = "assets/paytm_upi_qr.png"
+
+
+def show_payment_qr() -> None:
+    """
+    Show your static Paytm UPI QR code.
+    User scans and pays to 9871495899@ptyes.
+    You verify payment manually and send activation code.
+    """
+    st.markdown("**Option 2 – Purchase Premium via UPI**")
+    st.write(
+        "Scan this UPI QR with any app (Paytm, GPay, PhonePe, etc.) to pay for "
+        "premium access. After you complete the payment and we verify it, "
+        "you will receive an activation code."
+    )
+    try:
+        st.image(QR_IMAGE_PATH, caption="Scan to pay via UPI", use_column_width=False)
+    except Exception as e:
+        st.error(f"Could not load QR image at '{QR_IMAGE_PATH}'. Error: {e}")
+
+
+def show_activation_area(prefix: str = "") -> None:
+    """
+    Activation-code based premium unlock.
+    prefix is used only to keep Streamlit widget keys unique.
+    """
+    st.markdown("**Option 3 – Already paid? Enter activation code**")
+    key_suffix = f"_{prefix}" if prefix else ""
+    code = st.text_input(
+        "Activation code",
+        type="password",
+        key=f"activation_code{key_suffix}",
+    )
+    if st.button("Activate Premium", key=f"activate_premium_btn{key_suffix}"):
+        if code in VALID_CODES:
+            st.session_state.is_premium = True
+            # Also mark civil/formats as unlocked for this session
+            st.session_state.civil_unlocked = True
+            st.session_state.formats_unlocked = True
+            st.success(
+                "Premium unlocked. Civil Work Packages and CPWD/PWD Formats "
+                "are now available without passwords."
+            )
+        else:
+            st.error("Invalid activation code. Please check and try again.")
+
 
 # =============================================================================
 # Helpers
@@ -90,6 +148,10 @@ if "project_info" not in st.session_state:
         "rate_source": "CPWD DSR 2023 (Civil + Elect)",
     }
 
+# Premium flag
+if "is_premium" not in st.session_state:
+    st.session_state.is_premium = False
+
 # Tender engine state
 if "aa" not in st.session_state:
     st.session_state.aa = None  # AdministrativeApproval
@@ -141,7 +203,7 @@ st.markdown(
 )
 
 # =============================================================================
-# Sidebar – Project / Rates
+# Sidebar – Project / Rates / Premium status
 # =============================================================================
 
 with st.sidebar:
@@ -183,6 +245,13 @@ with st.sidebar:
     st.subheader("⚙️ Pricing Adjustments (informational)")
     contingency_pct = st.slider("Contingency (%)", 0.0, 10.0, 5.0, 0.5)
     escalation_annual = st.slider("Escalation p.a. (%)", 0.0, 10.0, 5.0, 0.5)
+
+    st.subheader("👤 Access / Premium Status")
+    st.write(f"Premium access: **{'Yes' if st.session_state.is_premium else 'No'}**")
+    st.caption(
+        "Premium users can access Civil Work Packages and CPWD/PWD Formats "
+        "without entering passwords."
+    )
 
 # =============================================================================
 # Dashboard metrics
@@ -363,25 +432,33 @@ with tab1:
                 st.balloons()
 
     # -------------------------------------------------------------------------
-    # 1B. Civil Work Package (protected by password 03656236)
+    # 1B. Civil Work Package (now unlockable by password OR premium)
     # -------------------------------------------------------------------------
     elif mode == "Civil Work Package":
-        # First, check if civil packages are unlocked
+        # Premium users bypass password automatically
+        if st.session_state.is_premium:
+            st.session_state.civil_unlocked = True
+
         if not st.session_state.get("civil_unlocked", False):
-            with st.expander("🔐 Civil Packages Locked – Enter Password to Unlock", expanded=True):
+            with st.expander("🔐 Civil Packages Locked – Unlock Access", expanded=True):
+                st.markdown("**Option 1 – Unlock with internal password (for your own use)**")
                 civil_pw = st.text_input(
                     "Enter Civil Package Password",
                     type="password",
                     key="civil_pkg_pw",
                 )
-                if st.button("🔓 Unlock Civil Packages", key="unlock_civil_pkg_btn"):
+                if st.button("🔓 Unlock with Password", key="unlock_civil_pkg_btn"):
                     if civil_pw == "03656236":
                         st.session_state.civil_unlocked = True
                         st.success("✅ Civil packages unlocked for this session.")
                     else:
                         st.error("❌ Invalid password. Please enter correct key.")
-            # Stop here if not unlocked yet
-            if not st.session_state.get("civil_unlocked", False):
+
+                st.markdown("---")
+                show_payment_qr()
+                show_activation_area(prefix="civil")
+
+            if not (st.session_state.get("civil_unlocked", False) or st.session_state.is_premium):
                 st.stop()
 
         # Once unlocked, proceed as normal
@@ -660,15 +737,19 @@ with tab3:
         )
 
 # =============================================================================
-# TAB 4 – CPWD / PWD Formats
+# TAB 4 – CPWD / PWD Formats (now unlockable by password OR premium)
 # =============================================================================
 
 with tab4:
     st.subheader("📄 CPWD / PWD Formats")
 
-    # Password protection same as civil work package
+    # Premium users bypass password
+    if st.session_state.is_premium:
+        st.session_state.formats_unlocked = True
+
     if not st.session_state.get("formats_unlocked", False):
-        with st.expander("🔐 Formats Locked – Enter Password to Unlock", expanded=True):
+        with st.expander("🔐 Formats Locked – Unlock Access", expanded=True):
+            st.markdown("**Option 1 – Unlock with internal password (for your own use)**")
             formats_pw = st.text_input(
                 "Enter Formats Password",
                 type="password",
@@ -681,7 +762,11 @@ with tab4:
                 else:
                     st.error("❌ Invalid password. Please enter correct key.")
 
-        if not st.session_state.get("formats_unlocked", False):
+            st.markdown("---")
+            show_payment_qr()
+            show_activation_area(prefix="formats")
+
+        if not (st.session_state.get("formats_unlocked", False) or st.session_state.is_premium):
             st.stop()
 
     if not st.session_state.qto_items:
@@ -1366,5 +1451,9 @@ Time of Completion  : {loa.completion_time_days} days
                 )
 
 st.success(
-    "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), MEP packages, IS-1200 measurement, multi-discipline rule checks, and CPWD/PWD tender flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\nCivil Work Packages and CPWD/PWD Formats are password-protected with key 03656236."
+    "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), "
+    "MEP packages, IS-1200 measurement, multi-discipline rule checks, and CPWD/PWD tender "
+    "flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\n"
+    "Civil Work Packages and CPWD/PWD Formats can now be unlocked either by internal "
+    "password (03656236) or by purchasing premium via UPI and entering a valid activation code."
 )
