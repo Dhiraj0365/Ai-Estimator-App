@@ -1,1 +1,60 @@
-![image alt](https://github.com/Dhiraj0365/Ai-Estimator-App/raw/247fb08ddf4844668cf4920566c2573eb088b408/WhatsApp%20Image%202026-04-09%20at%2011.00.22%20PM.jpeg)
+import io
+import qrcode
+
+# You give these codes only to users who have paid via UPI
+VALID_CODES = {
+    "PREM499",
+    "PREM999",
+    # add/change codes as you like
+}
+
+# --- UPI settings ---
+UPI_VPA = "9871495899@ptyes"           # your UPI ID
+UPI_PAYEE_NAME = "DhirajChaudhary"     # shown in UPI app
+UPI_AMOUNT = 499                       # fixed premium price in ₹
+UPI_NOTE = "AI_Estimator_Premium"      # remark in UPI app
+
+
+def build_upi_uri() -> str:
+    """
+    Build a proper UPI deeplink, e.g.
+    upi://pay?pa=...&pn=...&am=499&cu=INR&tn=...
+    """
+    return (
+        f"upi://pay?"
+        f"pa={UPI_VPA}"
+        f"&pn={UPI_PAYEE_NAME}"
+        f"&am={UPI_AMOUNT}"
+        f"&cu=INR"
+        f"&tn={UPI_NOTE}"
+    )
+
+
+def show_payment_qr() -> None:
+    """
+    Generate a clean UPI QR from the UPI deeplink.
+    Scanning this should always open a UPI payment
+    with your VPA and the fixed amount.
+    """
+    st.markdown("**Option 2 – Purchase Premium via UPI**")
+    st.write(
+        f"Scan this QR with Paytm / GPay / PhonePe to pay **₹{UPI_AMOUNT}** "
+        "for premium access. After you complete the payment and we verify it, "
+        "you will receive an activation code."
+    )
+
+    upi_uri = build_upi_uri()
+
+    # Generate QR image in memory
+    qr_img = qrcode.make(upi_uri)
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    buf.seek(0)
+
+    st.image(buf, caption=f"Pay ₹{UPI_AMOUNT} to {UPI_VPA}", use_column_width=False)
+
+    st.info(
+        "After paying, contact us with your transaction details. "
+        "We will verify the payment and share your activation code. "
+        "Enter that code below to unlock premium."
+    )
