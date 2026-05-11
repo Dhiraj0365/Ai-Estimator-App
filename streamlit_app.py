@@ -5,6 +5,11 @@ from typing import List, Dict, Any
 
 import pandas as pd
 import streamlit as st
+import io
+import qrcode
+
+from core.models import BOQLine, Item
+...
 
 from core.models import BOQLine, Item
 from core.pricing import monte_carlo_amount
@@ -42,53 +47,55 @@ VALID_CODES = {
     # add/change codes as you like
 }
 
-# Path to your Paytm UPI QR image (screenshot you shared)
-QR_IMAGE_PATH = "assets/paytm_upi_qr.png"
+# UPI payment settings for premium
+UPI_VPA = "9871495899@ptyes"           # your UPI ID
+UPI_PAYEE_NAME = "DhirajChaudhary"     # shown in UPI apps
+UPI_AMOUNT = 499                       # premium price in ₹
+UPI_NOTE = "AI_Estimator_Premium"      # remark in UPI apps
+
+
+def build_upi_uri() -> str:
+    """
+    Build a proper UPI deeplink, e.g.
+    upi://pay?pa=...&pn=...&am=499&cu=INR&tn=...
+    """
+    return (
+        f"upi://pay?"
+        f"pa={UPI_VPA}"
+        f"&pn={UPI_PAYEE_NAME}"
+        f"&am={UPI_AMOUNT}"
+        f"&cu=INR"
+        f"&tn={UPI_NOTE}"
+    )
 
 
 def show_payment_qr() -> None:
     """
-    Show your static Paytm UPI QR code.
-    User scans and pays to 9871495899@ptyes.
-    You verify payment manually and send activation code.
+    Generate a clean UPI QR from the UPI deeplink.
+    Scanning this should open a UPI payment with your VPA and amount.
     """
     st.markdown("**Option 2 – Purchase Premium via UPI**")
     st.write(
-        "Scan this UPI QR with any app (Paytm, GPay, PhonePe, etc.) to pay for "
-        "premium access. After you complete the payment and we verify it, "
+        f"Scan this QR with Paytm / GPay / PhonePe to pay **₹{UPI_AMOUNT}** "
+        "for premium access. After you complete the payment and we verify it, "
         "you will receive an activation code."
     )
-    try:
-        st.image(QR_IMAGE_PATH, caption="Scan to pay via UPI", use_column_width=False)
-    except Exception as e:
-        st.error(f"Could not load QR image at '{QR_IMAGE_PATH}'. Error: {e}")
 
+    upi_uri = build_upi_uri()
 
-def show_activation_area(prefix: str = "") -> None:
-    """
-    Activation-code based premium unlock.
-    prefix is used only to keep Streamlit widget keys unique.
-    """
-    st.markdown("**Option 3 – Already paid? Enter activation code**")
-    key_suffix = f"_{prefix}" if prefix else ""
-    code = st.text_input(
-        "Activation code",
-        type="password",
-        key=f"activation_code{key_suffix}",
+    # Generate QR PNG in memory
+    qr_img = qrcode.make(upi_uri)
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    buf.seek(0)
+
+    st.image(buf, caption=f"Pay ₹{UPI_AMOUNT} to {UPI_VPA}", use_column_width=False)
+
+    st.info(
+        "After paying, contact us with your transaction details. "
+        "We will verify the payment and share your activation code. "
+        "Enter that code below to unlock premium."
     )
-    if st.button("Activate Premium", key=f"activate_premium_btn{key_suffix}"):
-        if code in VALID_CODES:
-            st.session_state.is_premium = True
-            # Also mark civil/formats as unlocked for this session
-            st.session_state.civil_unlocked = True
-            st.session_state.formats_unlocked = True
-            st.success(
-                "Premium unlocked. Civil Work Packages and CPWD/PWD Formats "
-                "are now available without passwords."
-            )
-        else:
-            st.error("Invalid activation code. Please check and try again.")
-
 
 # =============================================================================
 # Helpers
