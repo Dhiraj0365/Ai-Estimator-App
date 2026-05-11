@@ -76,7 +76,7 @@ def show_payment_qr() -> None:
     """
     st.markdown("**Option 2 – Purchase Premium via UPI**")
     st.write(
-        f"upi://pay?pa=9871495899@ptyes&pn=DhirajChaudhary&am=499&cu=INR&tn=AI_Estimator_Premium   Scan this QR with Paytm / GPay / PhonePe to pay **₹{UPI_AMOUNT}** "
+        f"Scan this QR with Paytm / GPay / PhonePe to pay **₹{UPI_AMOUNT}** "
         "for premium access. After you complete the payment and we verify it, "
         "you will receive an activation code."
     )
