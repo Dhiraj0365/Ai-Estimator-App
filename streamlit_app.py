@@ -62,33 +62,34 @@ def build_upi_uri() -> str:
 
 
 def show_payment_qr() -> None:
-    """
-    Generate a clean UPI QR from the UPI deeplink.
-    Scanning this should open a UPI payment with your VPA and amount.
-    """
     st.markdown("**Option 2 – Purchase Premium via UPI**")
     st.write(
-        f"Scan this QR with Paytm / GPay / PhonePe to pay **₹{UPI_AMOUNT}** "
+        "Scan this QR with Paytm / GPay / PhonePe to pay **₹499** "
         "for premium access. After you complete the payment and we verify it, "
         "you will receive an activation code."
     )
 
-    upi_uri = build_upi_uri()
+    upi_uri = build_upi_uri()  # exact string you provided
 
-    # Generate QR PNG in memory
+    # Generate QR
     qr_img = qrcode.make(upi_uri)
     buf = io.BytesIO()
     qr_img.save(buf, format="PNG")
     buf.seek(0)
 
-    st.image(buf, caption=f"Pay ₹{UPI_AMOUNT} to {UPI_VPA}", use_column_width=False)
+    st.image(buf, caption="Pay ₹499 to 9871495899@ptyes", use_column_width=False)
+
+    # Show the raw UPI link for copy/paste or direct opening on mobile
+    st.write("UPI payment link (for copy/paste on mobile):")
+    st.code(upi_uri, language="text")
+    # Some mobile browsers will open this directly in a UPI app:
+    st.markdown(f"[Open UPI link (on mobile)]({upi_uri})")
 
     st.info(
         "After paying, contact us with your transaction details. "
         "We will verify the payment and share your activation code. "
         "Enter that code below to unlock premium."
     )
-
 # =============================================================================
 # Helpers
 # =============================================================================
