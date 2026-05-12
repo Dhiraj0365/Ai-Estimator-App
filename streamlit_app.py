@@ -56,17 +56,9 @@ UPI_NOTE = "AI_Estimator_Premium"      # remark in UPI apps
 
 def build_upi_uri() -> str:
     """
-    Build a proper UPI deeplink, e.g.
-    upi://pay?pa=...&pn=...&am=499&cu=INR&tn=...
+    Fixed UPI deeplink used for QR and for copy/paste.
     """
-    return (
-        f"upi://pay?"
-        f"pa={UPI_VPA}"
-        f"&pn={UPI_PAYEE_NAME}"
-        f"&am={UPI_AMOUNT}"
-        f"&cu=INR"
-        f"&tn={UPI_NOTE}"
-    )
+    return "upi://pay?pa=9871495899@ptyes&pn=DhirajChaudhary&am=499&cu=INR&tn=AI_Estimator_Premium"
 
 
 def show_payment_qr() -> None:
