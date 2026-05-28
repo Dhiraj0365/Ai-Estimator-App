@@ -10,8 +10,8 @@ import streamlit as st
 
 from core.models import BOQLine, Item
 from core.pricing import monte_carlo_amount
-from engines.bbs_engine import Bar, simple_beam_bbs, summarise_bars_by_dia
 from engines.is1200_civil import IS1200Engine
+from engines.bbs_engine import Bar, simple_beam_bbs, summarise_bars_by_dia
 from knowledge.dsr_master import (
     CPWD_BASE_DSR_2023,
     ITEMS,
@@ -231,6 +231,10 @@ if "civil_unlocked" not in st.session_state:
 if "formats_unlocked" not in st.session_state:
     st.session_state.formats_unlocked = False
 
+# Executed quantity per BOQ line for current RA bill
+if "ra_exec" not in st.session_state:
+    st.session_state.ra_exec: Dict[int, float] = {}
+
 # =============================================================================
 # Header
 # =============================================================================
@@ -319,7 +323,7 @@ col4.metric("🎯 P90 Risk Budget", format_rupees(mc["p90"]))
 # Tabs
 # =============================================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(
     [
         "📏 SOQ / BOQ",
         "📊 Abstract & Audit",
@@ -329,6 +333,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
         "🧮 Rate Analysis",
         "📦 Resources / Planning",
         "🔩 BBS & Steel",
+        "📑 RA Billing / Progress",
     ]
 )
 
@@ -478,10 +483,9 @@ with tab1:
                 st.balloons()
 
     # -------------------------------------------------------------------------
-    # 1B. Civil Work Package (now unlockable by password OR premium)
+    # 1B. Civil Work Package (unlockable by password OR premium)
     # -------------------------------------------------------------------------
     elif mode == "Civil Work Package":
-        # Premium users bypass password automatically
         if st.session_state.is_premium:
             st.session_state.civil_unlocked = True
 
@@ -507,7 +511,6 @@ with tab1:
             if not (st.session_state.get("civil_unlocked", False) or st.session_state.is_premium):
                 st.stop()
 
-        # Once unlocked, proceed as normal
         pkg_name = st.selectbox("Select Civil Package", list(WORK_PACKAGES_CIVIL.keys()))
         pkg = WORK_PACKAGES_CIVIL[pkg_name]
 
@@ -789,7 +792,6 @@ with tab3:
 with tab4:
     st.subheader("📄 CPWD / PWD Formats")
 
-    # Premium users bypass password
     if st.session_state.is_premium:
         st.session_state.formats_unlocked = True
 
@@ -832,9 +834,7 @@ with tab4:
         df = pd.DataFrame(st.session_state.qto_items)
         today = datetime.now()
 
-        # ---------------------------------------------------------------------
         # 1) FORM 5A – ABSTRACT OF COST
-        # ---------------------------------------------------------------------
         if "Form 5A" in format_type:
             st.markdown("### 📋 CPWD Form 5A – Abstract of Cost")
 
@@ -868,9 +868,7 @@ with tab4:
                 mime="text/csv",
             )
 
-        # ---------------------------------------------------------------------
         # 2) FORM 7 – SCHEDULE OF QUANTITIES
-        # ---------------------------------------------------------------------
         elif "Form 7" in format_type:
             st.markdown("### 📋 CPWD Form 7 – Schedule of Quantities")
 
@@ -914,9 +912,7 @@ with tab4:
                 mime="text/csv",
             )
 
-        # ---------------------------------------------------------------------
         # 3) FORM 8 – MEASUREMENT BOOK
-        # ---------------------------------------------------------------------
         elif "Form 8" in format_type:
             st.markdown("### 📏 CPWD Form 8 – Measurement Book")
 
@@ -945,9 +941,7 @@ with tab4:
                 mime="text/csv",
             )
 
-        # ---------------------------------------------------------------------
         # 4) FORM 31 – RUNNING ACCOUNT BILL
-        # ---------------------------------------------------------------------
         elif "Form 31" in format_type:
             st.markdown("### 💰 CPWD Form 31 – Running Account Bill (Simple)")
 
@@ -994,9 +988,7 @@ with tab4:
             c1.metric("Gross Value", format_rupees(gross))
             c2.metric("Net Payable", format_rupees(net))
 
-        # ---------------------------------------------------------------------
         # 5) PWD FORM 6 – WORK ORDER
-        # ---------------------------------------------------------------------
         else:
             st.markdown("### 📜 PWD Form 6 – Work Order (Summary)")
 
@@ -1051,7 +1043,7 @@ with tab4:
             )
 
 # =============================================================================
-# TAB 5 – Tender Engine (AA/ES → TS → NIT → Bids → LOA → PG → Work Order)
+# TAB 5 – Tender Engine
 # =============================================================================
 
 with tab5:
@@ -1074,9 +1066,7 @@ with tab5:
     aa_ok = st.session_state.aa is not None
     es_ok = st.session_state.es is not None
 
-    # -------------------------
     # Stage 1 – AA & ES
-    # -------------------------
     if step == "1️⃣ AA & ES":
         st.subheader("Administrative Approval (AA)")
 
@@ -1135,9 +1125,7 @@ with tab5:
             )
             st.success("Expenditure Sanction saved.")
 
-    # -------------------------
     # Stage 2 – Estimate & TS
-    # -------------------------
     elif step == "2️⃣ Estimate & TS":
         if not aa_ok or not es_ok:
             st.warning("Please complete AA & ES first (Stage 1).")
@@ -1173,9 +1161,7 @@ with tab5:
             )
             st.success("Technical Sanction recorded.")
 
-    # -------------------------
     # Stage 3 – NIT & Documents
-    # -------------------------
     elif step == "3️⃣ NIT & Documents":
         if not (aa_ok and es_ok and st.session_state.ts):
             st.warning("Please complete AA, ES and TS first (Stages 1 & 2).")
@@ -1237,9 +1223,7 @@ Eligibility : {nit.eligibility_criteria}
 """
             )
 
-    # -------------------------
     # Stage 4 – Bidders & Eligibility
-    # -------------------------
     elif step == "4️⃣ Bidders & Eligibility":
         if not st.session_state.nit:
             st.warning("Please create and save NIT first (Stage 3).")
@@ -1281,9 +1265,7 @@ Eligibility : {nit.eligibility_criteria}
             st.markdown("#### Registered Bidders")
             st.dataframe(pd.DataFrame(st.session_state.bidders), use_container_width=True)
 
-    # -------------------------
     # Stage 5 – Two-Bid Evaluation (Tech + Fin)
-    # -------------------------
     elif step == "5️⃣ Bid Evaluation (Tech + Fin)":
         if not st.session_state.bidders:
             st.warning("No bidders registered in Stage 4.")
@@ -1369,9 +1351,7 @@ Eligibility : {nit.eligibility_criteria}
                     f"L1 Bidder: **{l1['bidder_name']}** with quote {format_rupees(l1['quoted_amount'])}"
                 )
 
-    # -------------------------
     # Stage 6 – LOA, PG & Work Order
-    # -------------------------
     elif step == "6️⃣ LOA, PG & Work Order":
         if not st.session_state.bids:
             st.warning("No evaluated bids from Stage 5.")
@@ -1511,7 +1491,6 @@ with tab6:
         if "code" not in df.columns:
             st.error("BOQ lines do not contain DSR codes; cannot run rate analysis.")
         else:
-            # Filter only those BOQ items for which we have RA entries
             df_ra = df[df["code"].isin(RA_CODES)].copy()
 
             if df_ra.empty:
@@ -1531,7 +1510,6 @@ with tab6:
                     options,
                 )
 
-                # Parse selected id
                 sel_id = int(selected.split("]")[0].lstrip("["))
                 row = df_ra[df_ra["id"] == sel_id].iloc[0]
 
@@ -1638,8 +1616,9 @@ with tab6:
                             file_name=f"RA_{code.replace('.', '_')}.csv",
                             mime="text/csv",
                         )
+
 # =============================================================================
-# TAB 7 – Resources / Planning (Materials + Labour + Plant from Rate Analysis)
+# TAB 7 – Resources / Planning
 # =============================================================================
 
 with tab7:
@@ -1679,7 +1658,7 @@ with tab7:
 
                 any_ra = True
 
-                # ---------- Materials ----------
+                # Materials
                 for m in ra["materials"]:
                     name = m["name"]
                     unit = m["unit"]
@@ -1699,10 +1678,9 @@ with tab7:
 
                     materials_tot[name]["qty_total"] += qty_total
                     materials_tot[name]["amount_total"] += amt_total
-                    # keep latest rate (they should all match)
                     materials_tot[name]["rate"] = rate
 
-                # ---------- Labour ----------
+                # Labour
                 for lab in ra["labour"]:
                     role = lab["role"]
                     mandays_per_unit = float(lab["mandays_per_unit"])
@@ -1722,7 +1700,7 @@ with tab7:
                     labour_tot[role]["amount_total"] += amt_total
                     labour_tot[role]["rate"] = rate
 
-                # ---------- Plant / Equipment ----------
+                # Plant
                 for pl in ra["plant"]:
                     eq = pl["equipment"]
                     hours_per_unit = float(pl["hours_per_unit"])
@@ -1749,7 +1727,7 @@ with tab7:
                     "for the DSR codes used in your BOQ."
                 )
             else:
-                # --------- Materials summary ----------
+                # Materials summary
                 if materials_tot:
                     st.markdown("### Materials Summary (from Rate Analysis)")
                     mdf = pd.DataFrame(list(materials_tot.values()))
@@ -1758,17 +1736,17 @@ with tab7:
                     mdf["amount_total"] = mdf["amount_total"].round(2)
                     st.dataframe(mdf, use_container_width=True)
 
-                    csv = mdf.to_csv(index=False).encode("utf-8")
+                    csv_m = mdf.to_csv(index=False).encode("utf-8")
                     st.download_button(
                         "📥 Download Materials Summary (CSV)",
-                        csv,
+                        csv_m,
                         file_name="materials_summary.csv",
                         mime="text/csv",
                     )
                 else:
                     st.write("_No materials summary available (no RA materials defined)._")
 
-                # --------- Labour summary ----------
+                # Labour summary
                 if labour_tot:
                     st.markdown("### Labour Summary (mandays)")
                     ldf = pd.DataFrame(list(labour_tot.values()))
@@ -1794,7 +1772,7 @@ with tab7:
                 else:
                     st.write("_No labour summary available (no RA labour defined)._")
 
-                # --------- Plant summary ----------
+                # Plant summary
                 if plant_tot:
                     st.markdown("### Plant / Equipment Summary (hours)")
                     pdf = pd.DataFrame(list(plant_tot.values()))
@@ -1811,13 +1789,13 @@ with tab7:
                         mime="text/csv",
                     )
                 else:
-                    st.write("_No plant summary available (no RA plant defined)._")                        
+                    st.write("_No plant summary available (no RA plant defined)._")
 
 # =============================================================================
 # TAB 8 – BBS & Steel (Simple RCC Beam BBS)
 # =============================================================================
 
-with tab7:
+with tab8:
     st.subheader("🔩 Bar Bending Schedule – Simple RCC Beam")
 
     st.markdown(
@@ -1867,7 +1845,6 @@ with tab7:
         if not bars:
             st.error("No bars generated. Check input values.")
         else:
-            # BBS table
             data = []
             for b in bars:
                 data.append(
@@ -1889,7 +1866,6 @@ with tab7:
             total_weight = sum(b.weight_kg for b in bars)
             st.write(f"**Total steel weight for this beam: {total_weight:.3f} kg**")
 
-            # Summary by diameter
             summary = summarise_bars_by_dia(bars)
             if summary:
                 st.markdown("#### Steel weight by bar diameter")
@@ -1899,7 +1875,6 @@ with tab7:
                 ]
                 st.dataframe(pd.DataFrame(sum_rows), use_container_width=True)
 
-            # Optionally add total steel to BOQ
             if st.button("➕ Add this steel quantity to BOQ as reinforcement item"):
                 steel_key = "STEEL_REINF_FE500"
                 if steel_key not in ITEMS:
@@ -1916,7 +1891,7 @@ with tab7:
                     line = BOQLine(
                         id=_next_id(),
                         code=item.code,
-                        description=f"Reinforcement steel from BBS – simple beam",
+                        description="Reinforcement steel from BBS – simple beam",
                         quantity=qty_kg,
                         unit="kg",
                         rate=rate,
@@ -1933,6 +1908,144 @@ with tab7:
                     )
                     st.session_state.qto_items.append(_boqline_to_dict(line))
                     st.success("Steel quantity from BBS added to BOQ.")
+
+# =============================================================================
+# TAB 9 – RA Billing / Progress
+# =============================================================================
+
+with tab9:
+    st.subheader("📑 RA Billing / Progress – This Running Account Bill")
+
+    if not st.session_state.qto_items:
+        st.info("Prepare SOQ / BOQ in the first tab before creating an RA bill.")
+    else:
+        df_boq = pd.DataFrame(st.session_state.qto_items)
+
+        if "id" not in df_boq.columns or "rate" not in df_boq.columns:
+            st.error("BOQ items must have 'id' and 'rate' fields to create RA bills.")
+        else:
+            c1, c2 = st.columns(2)
+            bill_no = c1.text_input("RA Bill No.", value="1")
+            bill_date = c2.date_input("RA Bill Date", value=datetime.today())
+
+            st.caption(
+                "This simple RA module treats earlier bills as zero for now "
+                "(first RA). For subsequent bills you can adjust executed quantities "
+                "manually or extend the logic to store cumulative history."
+            )
+
+            st.markdown("### Enter Executed Quantities for This Bill")
+
+            ra_rows = []
+            total_this_bill = 0.0
+
+            for _, row in df_boq.iterrows():
+                item_id = int(row["id"])
+                code = str(row.get("code", "") or "")
+                desc = str(row.get("description", "") or "")
+                unit = str(row.get("unit", "") or "")
+                rate = float(row.get("rate", 0.0) or 0.0)
+                contract_qty = float(row.get("quantity", 0.0) or 0.0)
+
+                prev_exec = st.session_state.ra_exec.get(item_id, 0.0)
+
+                exec_qty = st.number_input(
+                    f"[{item_id}] {code} – {desc[:40]}…  |  Contract: {contract_qty:.3f} {unit}",
+                    min_value=0.0,
+                    max_value=contract_qty,
+                    value=float(prev_exec),
+                    step=0.01,
+                    key=f"ra_exec_{item_id}",
+                )
+
+                st.session_state.ra_exec[item_id] = exec_qty
+
+                amount_this = exec_qty * rate
+                total_this_bill += amount_this
+
+                ra_rows.append(
+                    {
+                        "Item No": item_id,
+                        "DSR Code": code,
+                        "Description": desc,
+                        "Unit": unit,
+                        "Contract Qty": contract_qty,
+                        "Executed This Bill": exec_qty,
+                        "Rate (₹)": rate,
+                        "Amount This Bill (₹)": amount_this,
+                    }
+                )
+
+            st.markdown("### Item-wise RA Statement (This Bill)")
+            df_ra = pd.DataFrame(ra_rows)
+            if not df_ra.empty:
+                df_disp = df_ra.copy()
+                df_disp["Contract Qty"] = df_disp["Contract Qty"].round(3)
+                df_disp["Executed This Bill"] = df_disp["Executed This Bill"].round(3)
+                df_disp["Rate (₹)"] = df_disp["Rate (₹)"].round(2)
+                df_disp["Amount This Bill (₹)"] = df_disp["Amount This Bill (₹)"].round(2)
+                st.dataframe(df_disp, use_container_width=True)
+
+                st.write(f"**Gross amount for this RA bill (Σ item amounts): {format_rupees(total_this_bill)}**")
+
+                it_ded = total_this_bill * 0.02
+                cess_ded = total_this_bill * 0.01
+                net_payable = total_this_bill - it_ded - cess_ded
+
+                st.markdown("### Summary for This RA Bill")
+                sdata = {
+                    "Particulars": [
+                        "Gross value of work done (this bill)",
+                        "Less: Income Tax @2%",
+                        "Less: Labour Cess @1%",
+                        "NET AMOUNT PAYABLE",
+                    ],
+                    "Amount (₹)": [
+                        format_rupees(total_this_bill),
+                        format_rupees(it_ded),
+                        format_rupees(cess_ded),
+                        format_rupees(net_payable),
+                    ],
+                }
+                df_sum = pd.DataFrame(sdata)
+                st.dataframe(df_sum, use_container_width=True)
+
+                if st.button("📥 Download RA Bill (CSV)"):
+                    header_rows = [
+                        {
+                            "Item No": "",
+                            "DSR Code": "",
+                            "Description": f"RA Bill No: {bill_no}",
+                            "Unit": "",
+                            "Contract Qty": "",
+                            "Executed This Bill": "",
+                            "Rate (₹)": "",
+                            "Amount This Bill (₹)": "",
+                        },
+                        {
+                            "Item No": "",
+                            "DSR Code": "",
+                            "Description": f"RA Bill Date: {bill_date.strftime('%d/%m/%Y')}",
+                            "Unit": "",
+                            "Contract Qty": "",
+                            "Executed This Bill": "",
+                            "Rate (₹)": "",
+                            "Amount This Bill (₹)": "",
+                        },
+                        {},
+                    ]
+                    df_header = pd.DataFrame(header_rows)
+                    df_export = pd.concat([df_header, df_disp], ignore_index=True)
+                    csv = df_export.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "Download RA Bill CSV",
+                        csv,
+                        file_name=f"RA_Bill_{bill_no}.csv",
+                        mime="text/csv",
+                    )
+            else:
+                st.info("No quantities entered for this RA bill yet.")
+
 # =============================================================================
 # Final banner
 # =============================================================================
@@ -1940,7 +2053,8 @@ with tab7:
 st.success(
     "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), "
     "MEP packages, IS-1200 measurement, multi-discipline rule checks, rate analysis engine, "
-    "and CPWD/PWD tender flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\n"
+    "resource planning, simple BBS steel estimator, RA billing and CPWD/PWD tender flow "
+    "(AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\n"
     "Civil Work Packages and CPWD/PWD Formats can now be unlocked either by internal "
     "password (03656236) or by purchasing premium via UPI and entering a valid activation code."
 )
