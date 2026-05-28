@@ -318,7 +318,7 @@ col4.metric("🎯 P90 Risk Budget", format_rupees(mc["p90"]))
 # Tabs
 # =============================================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
     [
         "📏 SOQ / BOQ",
         "📊 Abstract & Audit",
@@ -326,6 +326,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         "📄 CPWD/PWD Formats",
         "📜 Tender Engine",
         "🧮 Rate Analysis",
+        "📦 Resources / Planning",
         "🔩 BBS & Steel",
     ]
 )
@@ -1636,9 +1637,183 @@ with tab6:
                             file_name=f"RA_{code.replace('.', '_')}.csv",
                             mime="text/csv",
                         )
+# =============================================================================
+# TAB 7 – Resources / Planning (Materials + Labour + Plant from Rate Analysis)
+# =============================================================================
+
+with tab7:
+    st.subheader("📦 Resources & Planning (from Rate Analysis)")
+
+    if not st.session_state.qto_items:
+        st.info("Prepare SOQ / BOQ in the first tab to see resource summary.")
+    else:
+        df = pd.DataFrame(st.session_state.qto_items)
+
+        if "code" not in df.columns:
+            st.error("BOQ lines do not contain DSR codes; resource summary needs DSR codes.")
+        else:
+            project_months = st.number_input(
+                "Planned project duration (months)",
+                min_value=1.0,
+                max_value=120.0,
+                value=12.0,
+                step=1.0,
+            )
+            project_days = project_months * 30.0
+
+            materials_tot: Dict[str, Dict[str, Any]] = {}
+            labour_tot: Dict[str, Dict[str, Any]] = {}
+            plant_tot: Dict[str, Dict[str, Any]] = {}
+            any_ra = False
+
+            for _, row in df.iterrows():
+                code = str(row.get("code", "") or "")
+                qty_parent = float(row.get("quantity", 0.0) or 0.0)
+                if qty_parent <= 0 or code not in RA_CODES:
+                    continue
+
+                ra = compute_rate_analysis(code, cost_index)
+                if not ra:
+                    continue
+
+                any_ra = True
+
+                # ---------- Materials ----------
+                for m in ra["materials"]:
+                    name = m["name"]
+                    unit = m["unit"]
+                    qty_per_unit = float(m["qty_per_unit"])
+                    rate = float(m["rate"])
+                    qty_total = qty_per_unit * qty_parent
+                    amt_total = qty_total * rate
+
+                    if name not in materials_tot:
+                        materials_tot[name] = {
+                            "name": name,
+                            "unit": unit,
+                            "qty_total": 0.0,
+                            "rate": rate,
+                            "amount_total": 0.0,
+                        }
+
+                    materials_tot[name]["qty_total"] += qty_total
+                    materials_tot[name]["amount_total"] += amt_total
+                    # keep latest rate (they should all match)
+                    materials_tot[name]["rate"] = rate
+
+                # ---------- Labour ----------
+                for lab in ra["labour"]:
+                    role = lab["role"]
+                    mandays_per_unit = float(lab["mandays_per_unit"])
+                    rate = float(lab["rate"])
+                    mandays_total = mandays_per_unit * qty_parent
+                    amt_total = mandays_total * rate
+
+                    if role not in labour_tot:
+                        labour_tot[role] = {
+                            "role": role,
+                            "mandays_total": 0.0,
+                            "rate": rate,
+                            "amount_total": 0.0,
+                        }
+
+                    labour_tot[role]["mandays_total"] += mandays_total
+                    labour_tot[role]["amount_total"] += amt_total
+                    labour_tot[role]["rate"] = rate
+
+                # ---------- Plant / Equipment ----------
+                for pl in ra["plant"]:
+                    eq = pl["equipment"]
+                    hours_per_unit = float(pl["hours_per_unit"])
+                    rate = float(pl["rate"])
+                    hours_total = hours_per_unit * qty_parent
+                    amt_total = hours_total * rate
+
+                    if eq not in plant_tot:
+                        plant_tot[eq] = {
+                            "equipment": eq,
+                            "hours_total": 0.0,
+                            "rate": rate,
+                            "amount_total": 0.0,
+                        }
+
+                    plant_tot[eq]["hours_total"] += hours_total
+                    plant_tot[eq]["amount_total"] += amt_total
+                    plant_tot[eq]["rate"] = rate
+
+            if not any_ra:
+                st.warning(
+                    "No BOQ items have configured rate analysis.\n\n"
+                    "Add entries in knowledge.rate_analysis.RATE_ANALYSIS_BY_CODE "
+                    "for the DSR codes used in your BOQ."
+                )
+            else:
+                # --------- Materials summary ----------
+                if materials_tot:
+                    st.markdown("### Materials Summary (from Rate Analysis)")
+                    mdf = pd.DataFrame(list(materials_tot.values()))
+                    mdf["qty_total"] = mdf["qty_total"].round(3)
+                    mdf["rate"] = mdf["rate"].round(2)
+                    mdf["amount_total"] = mdf["amount_total"].round(2)
+                    st.dataframe(mdf, use_container_width=True)
+
+                    csv = mdf.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "📥 Download Materials Summary (CSV)",
+                        csv,
+                        file_name="materials_summary.csv",
+                        mime="text/csv",
+                    )
+                else:
+                    st.write("_No materials summary available (no RA materials defined)._")
+
+                # --------- Labour summary ----------
+                if labour_tot:
+                    st.markdown("### Labour Summary (mandays)")
+                    ldf = pd.DataFrame(list(labour_tot.values()))
+                    ldf["mandays_total"] = ldf["mandays_total"].round(3)
+                    ldf["rate"] = ldf["rate"].round(2)
+                    ldf["amount_total"] = ldf["amount_total"].round(2)
+                    if project_days > 0:
+                        ldf["avg_workers"] = (ldf["mandays_total"] / project_days).round(2)
+                    st.dataframe(ldf, use_container_width=True)
+
+                    st.caption(
+                        "avg_workers is approximate average workforce required "
+                        f"over {project_months:.0f} months."
+                    )
+
+                    csv_l = ldf.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "📥 Download Labour Summary (CSV)",
+                        csv_l,
+                        file_name="labour_summary.csv",
+                        mime="text/csv",
+                    )
+                else:
+                    st.write("_No labour summary available (no RA labour defined)._")
+
+                # --------- Plant summary ----------
+                if plant_tot:
+                    st.markdown("### Plant / Equipment Summary (hours)")
+                    pdf = pd.DataFrame(list(plant_tot.values()))
+                    pdf["hours_total"] = pdf["hours_total"].round(3)
+                    pdf["rate"] = pdf["rate"].round(2)
+                    pdf["amount_total"] = pdf["amount_total"].round(2)
+                    st.dataframe(pdf, use_container_width=True)
+
+                    csv_p = pdf.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "📥 Download Plant Summary (CSV)",
+                        csv_p,
+                        file_name="plant_summary.csv",
+                        mime="text/csv",
+                    )
+                else:
+                    st.write("_No plant summary available (no RA plant defined)._")                        
 
 # =============================================================================
-# TAB 7 – BBS & Steel (Simple RCC Beam BBS)
+# TAB 8 – BBS & Steel (Simple RCC Beam BBS)
 # =============================================================================
 
 with tab7:
