@@ -3,13 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
-import pandas as pd
-import streamlit as st
 import io
+import pandas as pd
 import qrcode
-
-from core.models import BOQLine, Item
-...
+import streamlit as st
 
 from core.models import BOQLine, Item
 from core.pricing import monte_carlo_amount
@@ -35,12 +32,17 @@ from core.tender_models import (
     PerformanceGuarantee,
     WorkOrder,
 )
+from knowledge.rate_analysis import (
+    RATE_ANALYSIS_BY_CODE,
+    RA_CODES,
+    compute_rate_analysis,
+)
 
 # =============================================================================
 # Premium / UPI configuration
 # =============================================================================
 
-# You give these codes only to users who have paid via UPI
+# Activation codes you give only to users who have paid via UPI
 VALID_CODES = {
     "PREM499",
     "PREM999",
@@ -48,20 +50,31 @@ VALID_CODES = {
 }
 
 # UPI payment settings for premium
-UPI_VPA = "9871495899@ptyes"           # your UPI ID
-UPI_PAYEE_NAME = "DhirajChaudhary"     # shown in UPI apps
-UPI_AMOUNT = 499                       # premium price in ₹
-UPI_NOTE = "AI_Estimator_Premium"      # remark in UPI apps
+UPI_VPA = "9871495899@ptyes"
+UPI_PAYEE_NAME = "DhirajChaudhary"
+UPI_AMOUNT = 499
+UPI_NOTE = "AI_Estimator_Premium"
 
 
 def build_upi_uri() -> str:
     """
     Fixed UPI deeplink used for QR and for copy/paste.
     """
-    return "upi://pay?pa=9871495899@ptyes&pn=DhirajChaudhary&am=499&cu=INR&tn=AI_Estimator_Premium"
+    return (
+        "upi://pay?"
+        "pa=9871495899@ptyes"
+        "&pn=DhirajChaudhary"
+        "&am=499"
+        "&cu=INR"
+        "&tn=AI_Estimator_Premium"
+    )
 
 
 def show_payment_qr() -> None:
+    """
+    Generate a clean UPI QR from the UPI deeplink.
+    Scanning this should open a UPI payment window with your VPA and amount.
+    """
     st.markdown("**Option 2 – Purchase Premium via UPI**")
     st.write(
         "Scan this QR with Paytm / GPay / PhonePe to pay **₹499** "
@@ -69,9 +82,9 @@ def show_payment_qr() -> None:
         "you will receive an activation code."
     )
 
-    upi_uri = build_upi_uri()  # exact string you provided
+    upi_uri = build_upi_uri()
 
-    # Generate QR
+    # Generate QR PNG in memory
     qr_img = qrcode.make(upi_uri)
     buf = io.BytesIO()
     qr_img.save(buf, format="PNG")
@@ -79,10 +92,8 @@ def show_payment_qr() -> None:
 
     st.image(buf, caption="Pay ₹499 to 9871495899@ptyes", use_column_width=False)
 
-    # Show the raw UPI link for copy/paste or direct opening on mobile
     st.write("UPI payment link (for copy/paste on mobile):")
     st.code(upi_uri, language="text")
-    # Some mobile browsers will open this directly in a UPI app:
     st.markdown(f"[Open UPI link (on mobile)]({upi_uri})")
 
     st.info(
@@ -90,6 +101,37 @@ def show_payment_qr() -> None:
         "We will verify the payment and share your activation code. "
         "Enter that code below to unlock premium."
     )
+
+
+def show_activation_area(prefix: str = "") -> None:
+    """
+    Activation‑code based premium unlock.
+    prefix is used only to keep Streamlit widget keys unique
+    in different places (civil, formats, etc.).
+    """
+    st.markdown("**Option 3 – Already paid? Enter activation code**")
+    key_suffix = f"_{prefix}" if prefix else ""
+
+    code = st.text_input(
+        "Activation code",
+        type="password",
+        key=f"activation_code{key_suffix}",
+    )
+
+    if st.button("Activate Premium", key=f"activate_premium_btn{key_suffix}"):
+        if code in VALID_CODES:
+            st.session_state.is_premium = True
+            # also unlock password‑protected sections for this session
+            st.session_state.civil_unlocked = True
+            st.session_state.formats_unlocked = True
+            st.success(
+                "Premium unlocked. Civil Work Packages and CPWD/PWD Formats "
+                "are now available without passwords."
+            )
+        else:
+            st.error("Invalid activation code. Please check and try again.")
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -249,8 +291,8 @@ with st.sidebar:
     st.subheader("👤 Access / Premium Status")
     st.write(f"Premium access: **{'Yes' if st.session_state.is_premium else 'No'}**")
     st.caption(
-        "Premium users can access Civil Work Packages and CPWD/PWD Formats "
-        "without entering passwords."
+        "Premium users can access Civil Work Packages, CPWD/PWD Formats "
+        "and advanced tools without entering passwords."
     )
 
 # =============================================================================
@@ -276,13 +318,14 @@ col4.metric("🎯 P90 Risk Budget", format_rupees(mc["p90"]))
 # Tabs
 # =============================================================================
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     [
         "📏 SOQ / BOQ",
         "📊 Abstract & Audit",
         "🎯 Risk",
         "📄 CPWD/PWD Formats",
         "📜 Tender Engine",
+        "🧮 Rate Analysis",
     ]
 )
 
@@ -300,7 +343,7 @@ with tab1:
     )
 
     # -------------------------------------------------------------------------
-    # 1A. Single DSR Item
+    # 1A. Single DSR Item (Manual QTO)
     # -------------------------------------------------------------------------
     if mode == "Single DSR Item (Manual QTO)":
         c1, c2 = st.columns([1, 2])
@@ -737,7 +780,7 @@ with tab3:
         )
 
 # =============================================================================
-# TAB 4 – CPWD / PWD Formats (now unlockable by password OR premium)
+# TAB 4 – CPWD / PWD Formats (password OR premium)
 # =============================================================================
 
 with tab4:
@@ -1450,10 +1493,157 @@ Time of Completion  : {loa.completion_time_days} days
 """
                 )
 
+# =============================================================================
+# TAB 6 – Rate Analysis (Per-Unit, CPWD AoR style)
+# =============================================================================
+
+with tab6:
+    st.subheader("🧮 Rate Analysis – Per Unit (Materials + Labour + Plant)")
+
+    if not st.session_state.qto_items:
+        st.info("Prepare SOQ / BOQ in the first tab to analyse any item.")
+    else:
+        df = pd.DataFrame(st.session_state.qto_items)
+
+        if "code" not in df.columns:
+            st.error("BOQ lines do not contain DSR codes; cannot run rate analysis.")
+        else:
+            # Filter only those BOQ items for which we have RA entries
+            df_ra = df[df["code"].isin(RA_CODES)].copy()
+
+            if df_ra.empty:
+                st.warning(
+                    "No BOQ items match the sample Rate Analysis library yet.\n\n"
+                    "Either add matching DSR codes in knowledge.rate_analysis.RATE_ANALYSIS_BY_CODE,\n"
+                    "or adjust BOQ items to use those codes."
+                )
+            else:
+                df_ra.sort_values(by="id", inplace=True)
+                options = [
+                    f"[{int(row['id'])}] {row['code']} – {str(row['description'])[:60]}"
+                    for _, row in df_ra.iterrows()
+                ]
+                selected = st.selectbox(
+                    "Select a BOQ item (only items with configured rate analysis are shown)",
+                    options,
+                )
+
+                # Parse selected id
+                sel_id = int(selected.split("]")[0].lstrip("["))
+                row = df_ra[df_ra["id"] == sel_id].iloc[0]
+
+                code = str(row["code"])
+                qty = float(row.get("quantity", 0.0) or 0.0)
+                unit = row.get("unit", "")
+                dsr_rate = float(row.get("rate", 0.0) or 0.0)
+
+                st.markdown(
+                    f"**Selected Item:** `{code}` – {row['description']}\n\n"
+                    f"- BOQ quantity: **{qty:.3f} {unit}**\n"
+                    f"- DSR/BOQ rate: **₹{dsr_rate:,.2f} per {unit}**"
+                )
+
+                ra_res = compute_rate_analysis(code, cost_index)
+                if not ra_res:
+                    st.error(
+                        "No rate analysis entry found for this DSR code in RATE_ANALYSIS_BY_CODE.\n"
+                        "Please add it in knowledge/rate_analysis.py."
+                    )
+                else:
+                    entry = ra_res["entry"]
+
+                    st.markdown(f"**Reference:** {entry.reference}")
+
+                    # MATERIALS
+                    st.markdown("#### Materials (per unit)")
+                    mat_df = pd.DataFrame(ra_res["materials"])
+                    if not mat_df.empty:
+                        mat_df_display = mat_df.copy()
+                        mat_df_display["qty_per_unit"] = mat_df_display["qty_per_unit"].round(4)
+                        mat_df_display["rate"] = mat_df_display["rate"].round(2)
+                        mat_df_display["amount"] = mat_df_display["amount"].round(2)
+                        st.dataframe(mat_df_display, use_container_width=True)
+                        st.write(f"**Total material cost per {entry.parent_unit}: ₹{ra_res['total_material']:,.2f}**")
+                    else:
+                        st.write("_No materials configured for this item._")
+
+                    # LABOUR
+                    st.markdown("#### Labour (per unit)")
+                    lab_df = pd.DataFrame(ra_res["labour"])
+                    if not lab_df.empty:
+                        lab_df_display = lab_df.copy()
+                        lab_df_display["mandays_per_unit"] = lab_df_display["mandays_per_unit"].round(4)
+                        lab_df_display["rate"] = lab_df_display["rate"].round(2)
+                        lab_df_display["amount"] = lab_df_display["amount"].round(2)
+                        st.dataframe(lab_df_display, use_container_width=True)
+                        st.write(f"**Total labour cost per {entry.parent_unit}: ₹{ra_res['total_labour']:,.2f}**")
+                    else:
+                        st.write("_No labour components configured._")
+
+                    # PLANT
+                    st.markdown("#### Plant / Equipment (per unit)")
+                    pl_df = pd.DataFrame(ra_res["plant"])
+                    if not pl_df.empty:
+                        pl_df_display = pl_df.copy()
+                        pl_df_display["hours_per_unit"] = pl_df_display["hours_per_unit"].round(4)
+                        pl_df_display["rate"] = pl_df_display["rate"].round(2)
+                        pl_df_display["amount"] = pl_df_display["amount"].round(2)
+                        st.dataframe(pl_df_display, use_container_width=True)
+                        st.write(f"**Total plant cost per {entry.parent_unit}: ₹{ra_res['total_plant']:,.2f}**")
+                    else:
+                        st.write("_No plant components configured._")
+
+                    st.markdown("---")
+                    total_per_unit = ra_res["total_per_unit"]
+                    st.write(
+                        f"**Total analysed rate per {entry.parent_unit}: ₹{total_per_unit:,.2f}** "
+                        f"(Materials + Labour + Plant)"
+                    )
+
+                    if dsr_rate > 0:
+                        diff = total_per_unit - dsr_rate
+                        pct = diff / dsr_rate * 100.0
+                        st.write(
+                            f"- BOQ/DSR rate: **₹{dsr_rate:,.2f}**\n"
+                            f"- Difference: **₹{diff:,.2f} ({pct:+.2f}% vs BOQ rate)**"
+                        )
+
+                    # Total values for this BOQ line (qty × per-unit)
+                    if qty > 0:
+                        st.markdown("#### Totals for this BOQ line")
+                        st.write(
+                            f"- Total material cost: **₹{ra_res['total_material'] * qty:,.2f}**\n"
+                            f"- Total labour cost: **₹{ra_res['total_labour'] * qty:,.2f}**\n"
+                            f"- Total plant cost: **₹{ra_res['total_plant'] * qty:,.2f}**\n"
+                            f"- Total analysed amount: **₹{total_per_unit * qty:,.2f}**"
+                        )
+
+                        export_df = pd.concat(
+                            [
+                                mat_df.assign(component_type="Material"),
+                                lab_df.assign(component_type="Labour"),
+                                pl_df.assign(component_type="Plant"),
+                            ],
+                            ignore_index=True,
+                        )
+                        export_df["code"] = code
+                        export_df["description"] = entry.description
+                        csv = export_df.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            "📥 Download this rate analysis as CSV",
+                            csv,
+                            file_name=f"RA_{code.replace('.', '_')}.csv",
+                            mime="text/csv",
+                        )
+
+# =============================================================================
+# Final banner
+# =============================================================================
+
 st.success(
     "✅ Estimator + Tender Engine ready – Civil & RCC packages (concrete+steel+formwork), "
-    "MEP packages, IS-1200 measurement, multi-discipline rule checks, and CPWD/PWD tender "
-    "flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\n"
+    "MEP packages, IS-1200 measurement, multi-discipline rule checks, rate analysis engine, "
+    "and CPWD/PWD tender flow (AA/ES → TS → NIT → L1 → LOA → PG → WO) are active.\n\n"
     "Civil Work Packages and CPWD/PWD Formats can now be unlocked either by internal "
     "password (03656236) or by purchasing premium via UPI and entering a valid activation code."
 )
