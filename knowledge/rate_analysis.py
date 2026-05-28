@@ -1,3 +1,5 @@
+# knowledge/rate_analysis.py
+"""
 Rate Analysis Engine for CPWD / PWD style estimates.
 
 This module defines:
@@ -11,14 +13,14 @@ This module defines:
 NOTE:
 - All quantities below are EXAMPLE values; tune them against
   CPWD "Analysis of Rates" or your state's AoR.
-- Item keys used for materials must exist in knowledge.dsr_master.ITEMS,
-  or you can supply direct rate overrides.
+- item_key values must exist in knowledge.dsr_master.ITEMS,
+  or you can supply rate_override instead.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 from knowledge.dsr_master import ITEMS
 from core.models import Item
@@ -57,26 +59,16 @@ class MaterialComponent:
 
 @dataclass
 class LabourComponent:
-    """
-    Labour component per unit of parent item.
-
-    role: e.g. "Mason", "Mazdoor", "Carpenter".
-    mandays_per_unit: mandays required per 1 unit of parent item.
-    """
-    role: str
-    mandays_per_unit: float
+    """Labour component per unit of parent item."""
+    role: str                 # e.g. "Mason"
+    mandays_per_unit: float   # mandays needed per 1 unit
 
 
 @dataclass
 class PlantComponent:
-    """
-    Plant / equipment component per unit of parent item.
-
-    equipment: e.g. "ConcreteMixer_0.2m3", "Vibrator", "Crane".
-    hours_per_unit: machine hours per 1 unit of parent item.
-    """
-    equipment: str
-    hours_per_unit: float
+    """Plant / equipment component per unit of parent item."""
+    equipment: str            # e.g. "ConcreteMixer_0.2m3"
+    hours_per_unit: float     # machine hours per 1 unit
 
 
 @dataclass
@@ -110,22 +102,19 @@ LABOUR_RATES: Dict[str, float] = {
     "BarBender": 850.0,
     "Carpenter": 850.0,
     "Painter": 800.0,
-    # add as needed
 }
 
 PLANT_RATES: Dict[str, float] = {
     "ConcreteMixer_0.2m3": 450.0,  # ₹ / hour
     "Vibrator": 150.0,
     "Crane_Small": 1500.0,
-    # add as needed
 }
 
 
 # ---------------------------------------------------------------------
-# Sample rate analysis library – keyed by DSR code of PARENT item
+# Sample rate analysis library – keyed by DSR CODE of PARENT item
 # YOU MUST ALIGN codes with your actual DSR.
 # ---------------------------------------------------------------------
-
 
 RATE_ANALYSIS_BY_CODE: Dict[str, RateAnalysisEntry] = {
 
@@ -138,7 +127,7 @@ RATE_ANALYSIS_BY_CODE: Dict[str, RateAnalysisEntry] = {
         materials=[
             MaterialComponent(
                 qty_per_unit=7.0,
-                item_key="MAT_CEMENT_BAG",      # Must exist in ITEMS or use rate_override
+                item_key="MAT_CEMENT_BAG",
                 display_name="Cement (bags)",
                 unit="bag",
             ),
@@ -267,7 +256,6 @@ RATE_ANALYSIS_BY_CODE: Dict[str, RateAnalysisEntry] = {
     ),
 }
 
-
 RA_CODES = set(RATE_ANALYSIS_BY_CODE.keys())
 
 
@@ -279,7 +267,7 @@ RA_CODES = set(RATE_ANALYSIS_BY_CODE.keys())
 def compute_rate_analysis(
     code: str,
     cost_index: float,
-) -> Optional[Dict[str, any]]:
+) -> Optional[Dict[str, Any]]:
     """
     Compute per-unit rate analysis for the DSR item with given code.
 
@@ -307,7 +295,6 @@ def compute_rate_analysis(
             name = comp.display_name or item.description
             unit = comp.unit or item.unit
         else:
-            # no ITEMS mapping; fall back to override or zero
             rate = comp.rate_override or 0.0
             name = comp.display_name or (comp.item_key or "Material")
             unit = comp.unit or ""
