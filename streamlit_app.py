@@ -318,7 +318,7 @@ col4.metric("🎯 P90 Risk Budget", format_rupees(mc["p90"]))
 # Tabs
 # =============================================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     [
         "📏 SOQ / BOQ",
         "📊 Abstract & Audit",
@@ -326,6 +326,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         "📄 CPWD/PWD Formats",
         "📜 Tender Engine",
         "🧮 Rate Analysis",
+        "🔩 BBS & Steel",
     ]
 )
 
@@ -1636,6 +1637,126 @@ with tab6:
                             mime="text/csv",
                         )
 
+# =============================================================================
+# TAB 7 – BBS & Steel (Simple RCC Beam BBS)
+# =============================================================================
+
+with tab7:
+    st.subheader("🔩 Bar Bending Schedule – Simple RCC Beam")
+
+    st.markdown(
+        "Quick BBS generator for a single RCC beam with straight top & bottom "
+        "bars and uniform stirrups. Suitable for estimation (not a replacement "
+        "for full design drawings)."
+    )
+
+    col_geom, col_main, col_stir = st.columns(3)
+
+    with col_geom:
+        span_clear_m = st.number_input("Clear span (m)", 1.0, 20.0, 4.0, 0.1)
+        beam_width_m = st.number_input("Beam width (m)", 0.15, 1.0, 0.23, 0.01)
+        beam_depth_m = st.number_input("Overall depth (m)", 0.20, 2.0, 0.45, 0.01)
+        cover_m = st.number_input("Concrete cover (m)", 0.02, 0.10, 0.03, 0.005)
+        dev_len_m = st.number_input("Development length (each end, m)", 0.20, 2.0, 0.50, 0.05)
+
+    with col_main:
+        bottom_dia_mm = st.number_input("Bottom bar dia (mm)", 8.0, 40.0, 16.0, 2.0)
+        bottom_count = int(st.number_input("Bottom bars – count", 1, 20, 2, 1))
+        top_dia_mm = st.number_input("Top bar dia (mm)", 8.0, 40.0, 12.0, 2.0)
+        top_count = int(st.number_input("Top bars – count", 1, 20, 2, 1))
+
+    with col_stir:
+        stirrup_dia_mm = st.number_input("Stirrup dia (mm)", 6.0, 16.0, 8.0, 2.0)
+        stirrup_leg_count = int(
+            st.number_input("Stirrup legs (typ. 4)", 2, 6, 4, 1)
+        )
+        stirrup_spacing_mm = st.number_input("Stirrup spacing (mm)", 50.0, 300.0, 150.0, 25.0)
+
+    if st.button("Generate BBS for this beam"):
+        bars = simple_beam_bbs(
+            span_clear_m=span_clear_m,
+            beam_width_m=beam_width_m,
+            beam_depth_m=beam_depth_m,
+            cover_m=cover_m,
+            bottom_dia_mm=bottom_dia_mm,
+            bottom_count=bottom_count,
+            top_dia_mm=top_dia_mm,
+            top_count=top_count,
+            dev_len_m=dev_len_m,
+            stirrup_dia_mm=stirrup_dia_mm,
+            stirrup_leg_count=stirrup_leg_count,
+            stirrup_spacing_mm=stirrup_spacing_mm,
+        )
+
+        if not bars:
+            st.error("No bars generated. Check input values.")
+        else:
+            # BBS table
+            data = []
+            for b in bars:
+                data.append(
+                    {
+                        "Mark": b.mark,
+                        "Dia (mm)": b.dia_mm,
+                        "No. of bars": b.count,
+                        "Length of one bar (m)": round(b.length_m, 3),
+                        "Total length (m)": round(b.total_length_m, 3),
+                        "Unit wt (kg/m)": round(b.unit_weight_kg_per_m, 4),
+                        "Weight (kg)": round(b.weight_kg, 3),
+                        "Shape": b.shape,
+                    }
+                )
+            df_bbs = pd.DataFrame(data)
+            st.markdown("### Bar Bending Schedule (Beam)")
+            st.dataframe(df_bbs, use_container_width=True)
+
+            total_weight = sum(b.weight_kg for b in bars)
+            st.write(f"**Total steel weight for this beam: {total_weight:.3f} kg**")
+
+            # Summary by diameter
+            summary = summarise_bars_by_dia(bars)
+            if summary:
+                st.markdown("#### Steel weight by bar diameter")
+                sum_rows = [
+                    {"Dia (mm)": d, "Weight (kg)": round(w, 3)}
+                    for d, w in sorted(summary.items())
+                ]
+                st.dataframe(pd.DataFrame(sum_rows), use_container_width=True)
+
+            # Optionally add total steel to BOQ
+            if st.button("➕ Add this steel quantity to BOQ as reinforcement item"):
+                steel_key = "STEEL_REINF_FE500"
+                if steel_key not in ITEMS:
+                    st.error(
+                        f"ITEMS does not contain key '{steel_key}'. "
+                        "Please define a reinforcement steel item in knowledge.dsr_master."
+                    )
+                else:
+                    item = ITEMS[steel_key]
+                    qty_kg = total_weight
+                    rate = item.rate_at_index(cost_index)
+                    amount = qty_kg * rate
+
+                    line = BOQLine(
+                        id=_next_id(),
+                        code=item.code,
+                        description=f"Reinforcement steel from BBS – simple beam",
+                        quantity=qty_kg,
+                        unit="kg",
+                        rate=rate,
+                        amount=amount,
+                        phase="SUPERSTRUCTURE",
+                        category=item.category,
+                        discipline=item.discipline,
+                        source="bbs_beam",
+                        length=span_clear_m,
+                        breadth=beam_width_m,
+                        depth=beam_depth_m,
+                        height=0.0,
+                        meta={"type": "BBS_beam"},
+                    )
+                    st.session_state.qto_items.append(_boqline_to_dict(line))
+                    st.success("Steel quantity from BBS added to BOQ.")
 # =============================================================================
 # Final banner
 # =============================================================================
